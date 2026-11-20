@@ -94,7 +94,7 @@ export function createAdminRoutes(options?: {
 
     return c.json({
       appName: c.env.APP_NAME || "Postlet",
-      appVersion: c.env.APP_VERSION || "0.1.1",
+      appVersion: c.env.APP_VERSION || "0.1.2",
       ownerEmail: c.get("ownerEmail") ?? "owner",
       counts,
       settings,

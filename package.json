@@ -1,6 +1,6 @@
 {
   "name": "postlet",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Cloudflare Worker-hosted email client and AI-agent mail gateway backed by Resend, D1, R2, Zero Trust Access, and Workers AI.",
@@ -11,9 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cf-typegen": "wrangler types",
-    "db:migrate:local": "wrangler d1 migrations apply postlet-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply postlet-db --remote",
-    "deploy": "npm run build && wrangler deploy"
+    "db:migrate:local": "wrangler d1 migrations apply postlet-db --config wrangler.jsonc --local",
+    "db:migrate:remote": "wrangler d1 migrations apply postlet-db --config wrangler.jsonc --remote",
+    "deploy": "npm run build && wrangler deploy && wrangler d1 migrations apply postlet-db --config wrangler.jsonc --remote",
+    "deploy:ci": "wrangler deploy && wrangler d1 migrations apply postlet-db --config wrangler.jsonc --remote"
   },
   "dependencies": {
     "dompurify": "^3.4.18",

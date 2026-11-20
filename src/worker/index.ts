@@ -6,6 +6,7 @@
  */
 
 import { Hono } from "hono";
+import { ensureDatabaseSchema } from "./db/bootstrap";
 import type { PostletEnv, PostletVariables } from "./env";
 import { createAdminRoutes } from "./routes/admin";
 import { createAgentV1Routes } from "./routes/agent-v1";
@@ -35,11 +36,20 @@ export function createApp(options?: CreateAppOptions) {
     c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   });
 
+  // Automatically bootstrap the D1 schema once per isolate cold start if the database
+  // was freshly auto-provisioned and D1 migrations have not yet been applied.
+  app.use("*", async (c, next) => {
+    if (c.req.path !== "/api/health" && c.env.DB) {
+      await ensureDatabaseSchema(c.env.DB);
+    }
+    await next();
+  });
+
   app.get("/api/health", (c) => {
     return c.json({
       ok: true,
       service: c.env.APP_NAME || "Postlet",
-      version: c.env.APP_VERSION || "0.1.1",
+      version: c.env.APP_VERSION || "0.1.2",
     });
   });
 
@@ -82,9 +92,11 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     const resendClient = new ResendClient(env.RESEND_API_KEY ?? "");
-    const task = runScheduledDailySummaryCheck(env.DB, env, resendClient).then((res) => {
+    const task = (async () => {
+      await ensureDatabaseSchema(env.DB);
+      const res = await runScheduledDailySummaryCheck(env.DB, env, resendClient);
       console.log(JSON.stringify({ message: "scheduled daily summary check", ...res }));
-    });
+    })();
     ctx.waitUntil(task);
   },
 } satisfies ExportedHandler<PostletEnv>;

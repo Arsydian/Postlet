@@ -1,4 +1,4 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.1.1-indigo)
+# Postlet ![Version](https://img.shields.io/badge/version-0.1.2-indigo)
 
 Self-hosted, single-owner email client and AI-agent mail gateway running on **Cloudflare Workers** and **Resend** — designed to deploy directly from a synced GitHub repository and run comfortably inside Cloudflare's Free Tier.
 
@@ -53,30 +53,25 @@ npm run build
 
 ## Deployment via GitHub → Cloudflare Workers Git Sync
 
-### 1. Provision D1 & R2 in Cloudflare
-Create your database and bucket (via Wrangler CLI or Cloudflare Dashboard):
+### 1. Automatic D1 & R2 Provisioning (Zero Manual DB Setup)
+`wrangler.jsonc` uses **Wrangler Automatic Resource Provisioning** (no `database_id` hardcoded in Git):
+- On first deployment, Cloudflare automatically creates the `postlet-db` D1 database and `postlet-attachments` R2 bucket and binds them to `DB` and `ATTACHMENTS` (and reuses them automatically on all future deploys).
+- On first Worker execution (HTTP request or scheduled Cron), Postlet's runtime schema bootstrapper automatically creates any missing D1 tables, FTS5 search indexes, triggers, and safe default settings (`ai_enabled = 'false'`).
 
-```bash
-npx wrangler d1 create postlet-db
-npx wrangler r2 bucket create postlet-attachments
-```
-
-Copy the output `database_id` into `wrangler.jsonc` (`d1_databases[0].database_id`), commit, and push to GitHub.
-
-Apply the D1 schema migration remotely (once, and on future schema changes):
-
-```bash
-npm run db:migrate:remote
-```
+#### Two One-Time Cloudflare Dashboard Prerequisites
+Before your first Git-triggered deploy:
+1. **Enable R2 Object Storage**: Open **Cloudflare Dashboard → R2 Object Storage** and activate R2 once on your account (10 GB/month Free Tier).
+2. **Grant `D1: Edit` to Workers Builds**: In **Cloudflare Dashboard → My Profile → API Tokens**, edit the Workers Builds API token and add **Account → D1 → Edit** (Cloudflare's default auto-generated build token omits `D1: Edit`, which is needed to auto-create `postlet-db` and apply migrations).
 
 ### 2. Connect GitHub Repo in Cloudflare Dashboard
 1. Open **Cloudflare Dashboard → Workers & Pages → Create → Import a repository**.
 2. Select your Postlet GitHub repository.
 3. Set:
    - **Build command**: `npm run build`
-   - **Deploy command**: `npx wrangler deploy`
-   - *(Optional CI migration)*: `npx wrangler d1 migrations apply postlet-db --remote && npx wrangler deploy`
-4. Verify your Worker bindings under **Settings → Bindings**:
+   - **Deploy command**:
+     - Zero-config option (schema self-bootstraps at runtime): `npx wrangler deploy`
+     - Or with formal `d1_migrations` tracking: `npm run deploy:ci` (runs `wrangler deploy` to provision `postlet-db` first, then applies `migrations/` remotely)
+4. After first deploy, verify your Worker bindings under **Settings → Bindings**:
    - `DB` → D1 database `postlet-db`
    - `ATTACHMENTS` → R2 bucket `postlet-attachments`
    - `AI` → Workers AI
