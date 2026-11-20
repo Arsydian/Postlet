@@ -1,0 +1,21 @@
+/**
+ * @file src/client/styles/index.css
+ * @description Tailwind CSS v4 base stylesheet and native <dialog> top-layer modal rules.
+ */
+@import "tailwindcss";
+
+/*
+ * Native modal <dialog> scroll containment per modern-web-guidance:
+ * prevents scroll gestures on the modal or its backdrop from scrolling the underlying page,
+ * without mutating overflow/position on html or body.
+ */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: rgb(15 23 42 / 0.48);
+  backdrop-filter: blur(2px);
+}

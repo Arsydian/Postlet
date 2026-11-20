@@ -1,0 +1,21 @@
+# Local Wrangler Secrets Template (copy to `.dev.vars` for `npm run dev`)
+# In production, configure these in the Cloudflare Dashboard -> Worker -> Settings -> Variables and Secrets.
+
+# Resend API key with Sending & Receiving permissions
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Resend webhook signing secret (starts with whsec_) from Resend Dashboard -> Webhooks
+RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Cloudflare Zero Trust Access team domain (without https://), e.g. myteam.cloudflareaccess.com
+CF_ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
+
+# Cloudflare Zero Trust Access Application Audience (AUD) tag
+CF_ACCESS_AUD=your-cloudflare-access-aud-tag
+
+# Primary domain configured in Resend (used as fallback when catch-all / addresses are checked)
+MAIL_DOMAIN=mail.example.com
+
+# Local development ONLY: allows bypassing Zero Trust JWT checks on localhost when CF_ACCESS_AUD is unset.
+# NEVER set this in production Cloudflare Dashboard variables.
+DEV_BYPASS_ACCESS=true

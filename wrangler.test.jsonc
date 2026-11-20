@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "postlet-test",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-11-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "postlet-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "postlet-attachments"
+    }
+  ],
+  "vars": {
+    "APP_NAME": "Postlet",
+    "APP_VERSION": "0.1.1",
+    "DEFAULT_AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"
+  }
+}
