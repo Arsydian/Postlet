@@ -20,7 +20,7 @@
   ],
   "vars": {
     "APP_NAME": "Postlet",
-    "APP_VERSION": "0.1.3",
+    "APP_VERSION": "0.1.4",
     "DEFAULT_AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"
   }
 }

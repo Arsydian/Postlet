@@ -158,7 +158,13 @@ export class ResendClient {
 
   constructor(apiKey: string, fetchFn?: typeof fetch, baseUrl = "https://api.resend.com") {
     this.apiKey = apiKey;
-    this.fetchFn = fetchFn ?? fetch;
+    // Wrap native `fetch` in an arrow function calling `globalThis.fetch` directly.
+    // Assigning bare `fetch` to `this.fetchFn` and calling `this.fetchFn(...)` binds
+    // `this` to the ResendClient instance, throwing `Illegal invocation` in Cloudflare Workers.
+    this.fetchFn =
+      !fetchFn || fetchFn === globalThis.fetch
+        ? (input, init) => globalThis.fetch(input, init)
+        : (input, init) => fetchFn(input, init);
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 

@@ -183,4 +183,46 @@ describe("Mail Threading, Search & Approval Flows", () => {
     expect(rejectRes.status).toBe(200);
     expect(mockResend.calls).toHaveLength(1);
   });
+
+  it("invokes globalThis.fetch with globalThis receiver when ResendClient uses default fetch (no Illegal invocation)", async () => {
+    // 1. Native workerd fetch check (checks receiver before URL parsing, never throws Illegal invocation).
+    for (const customFetch of [undefined, globalThis.fetch]) {
+      const client = new ResendClient("re_test", customFetch, "http://invalid host");
+      let thrown: unknown;
+      try {
+        await client.sendEmail({
+          from: "a@example.com",
+          to: ["b@example.com"],
+          subject: "Test",
+          text: "Hi",
+        });
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).not.toMatch(/Illegal invocation/i);
+    }
+
+    // 2. Strict receiver identity check verifying `this === globalThis`.
+    const originalFetch = globalThis.fetch;
+    let receivedThis: unknown = null;
+    try {
+      globalThis.fetch = async function (this: unknown) {
+        receivedThis = this;
+        return Response.json({ id: "re_default_fetch_ok" });
+      } as typeof fetch;
+
+      const client = new ResendClient("re_test");
+      const res = await client.sendEmail({
+        from: "a@example.com",
+        to: ["b@example.com"],
+        subject: "Test",
+        text: "Hi",
+      });
+      expect(res.id).toBe("re_default_fetch_ok");
+      expect(receivedThis).toBe(globalThis);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

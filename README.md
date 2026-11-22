@@ -1,4 +1,4 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.1.3-indigo)
+# Postlet ![Version](https://img.shields.io/badge/version-0.1.4-indigo)
 
 Self-hosted, single-owner email client and AI-agent mail gateway running on **Cloudflare Workers** and **Resend** — designed to deploy directly from a synced GitHub repository and run comfortably inside Cloudflare's Free Tier.
 

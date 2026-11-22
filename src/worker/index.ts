@@ -49,7 +49,7 @@ export function createApp(options?: CreateAppOptions) {
     return c.json({
       ok: true,
       service: c.env.APP_NAME || "Postlet",
-      version: c.env.APP_VERSION || "0.1.3",
+      version: c.env.APP_VERSION || "0.1.4",
     });
   });
 
@@ -80,7 +80,9 @@ export function createApp(options?: CreateAppOptions) {
 const app = createApp();
 
 export default {
-  fetch: app.fetch,
+  fetch(request, env, ctx) {
+    return app.fetch(request, env, ctx);
+  },
 
   /**
    * Hourly Cloudflare Cron trigger evaluating whether the built-in Cloudflare AI agent

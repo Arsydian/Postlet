@@ -268,7 +268,7 @@ export function buildTestEnv(overrides?: Partial<PostletEnv>): PostletEnv {
   return {
     ...base,
     APP_NAME: "Postlet",
-    APP_VERSION: "0.1.3",
+    APP_VERSION: "0.1.4",
     DEFAULT_AI_MODEL: "@cf/meta/llama-3.2-3b-instruct",
     RESEND_API_KEY: "re_test_key",
     RESEND_WEBHOOK_SECRET: `whsec_${btoa("supersecretkey1234567890")}`,

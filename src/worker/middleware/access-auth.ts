@@ -132,11 +132,16 @@ export async function verifyCloudflareAccessJwt(
   }
 
   const certsUrl = `${expectedIssuer}/cdn-cgi/access/certs`;
-  const fetchFn = options.fetchFn ?? fetch;
-  const certsResponse = await fetchFn(certsUrl, {
-    headers: { Accept: "application/json" },
-    ...(!options.fetchFn ? { cf: { cacheTtl: 300, cacheEverything: true } } : {}),
-  });
+  const customFetch =
+    options.fetchFn && options.fetchFn !== globalThis.fetch ? options.fetchFn : null;
+  const certsResponse = customFetch
+    ? await customFetch(certsUrl, {
+        headers: { Accept: "application/json" },
+      })
+    : await globalThis.fetch(certsUrl, {
+        headers: { Accept: "application/json" },
+        cf: { cacheTtl: 300, cacheEverything: true },
+      });
   if (!certsResponse.ok) {
     throw new Error(`Failed to fetch Cloudflare Access JWKS (${certsResponse.status})`);
   }

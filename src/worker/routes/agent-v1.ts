@@ -47,7 +47,7 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       openapi: "3.1.0",
       info: {
         title: "Postlet Agent Mail API",
-        version: c.env.APP_VERSION || "0.1.3",
+        version: c.env.APP_VERSION || "0.1.4",
         description:
           "Scoped mail & built-in AI functions API for AI agents. Use read_only, read_draft, or read_write bearer tokens.",
       },
