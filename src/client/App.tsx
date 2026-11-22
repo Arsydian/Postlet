@@ -4,6 +4,7 @@
  * search, thread viewing, composer modal, Daily Digests, and Settings.
  */
 
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type {
   AdminMetaResponse,
@@ -19,10 +20,12 @@ import { type SettingsTabId, SettingsView } from "./components/settings/Settings
 import { ThreadList } from "./components/ThreadList";
 import { ThreadView } from "./components/ThreadView";
 import { api } from "./lib/api";
+import { useTheme } from "./lib/theme";
 
 const PAGE_SIZE = 30;
 
 export default function App() {
+  const theme = useTheme();
   const [meta, setMeta] = useState<AdminMetaResponse | null>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("mail");
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>("addresses");
@@ -369,14 +372,22 @@ export default function App() {
 
   if (!meta) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
-        Loading Postlet...
+      <div className="neu-canvas flex h-screen items-center justify-center p-6">
+        <div className="neu-card flex items-center gap-3 rounded-3xl px-6 py-4">
+          <div className="neu-btn-accent flex h-9 w-9 items-center justify-center rounded-2xl text-sm font-bold">
+            P
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--neu-text)]">Loading Postlet…</p>
+            <p className="text-xs text-[var(--neu-text-muted)]">Initializing mailbox &amp; theme</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900">
+    <div className="neu-canvas flex h-screen w-screen overflow-hidden">
       <Sidebar
         appVersion={meta.appVersion}
         ownerEmail={meta.ownerEmail}
@@ -387,6 +398,9 @@ export default function App() {
         addresses={meta.addresses}
         settings={meta.settings}
         mobileOpen={mobileNavOpen}
+        themePreference={theme.preference}
+        resolvedTheme={theme.resolvedTheme}
+        onToggleTheme={theme.toggleTheme}
         onCloseMobile={() => setMobileNavOpen(false)}
         onCompose={openNewCompose}
         onSelectFolder={(folder) => {
@@ -437,6 +451,7 @@ export default function App() {
               <ThreadView
                 thread={selectedThread}
                 settings={meta.settings}
+                resolvedTheme={theme.resolvedTheme}
                 aiBusy={aiBusy}
                 actionBusy={actionBusy}
                 onBackMobile={() => {
@@ -484,6 +499,9 @@ export default function App() {
             activeTab={settingsTab}
             settings={meta.settings}
             addresses={meta.addresses}
+            themePreference={theme.preference}
+            systemTheme={theme.systemTheme}
+            onSelectThemePreference={theme.setPreference}
             onTabChange={setSettingsTab}
             onRefreshMeta={loadMeta}
             onOpenMobileNav={() => setMobileNavOpen(true)}
@@ -498,6 +516,7 @@ export default function App() {
         initial={composerInitial}
         addresses={meta.addresses}
         settings={meta.settings}
+        resolvedTheme={theme.resolvedTheme}
         onClose={() => setComposerOpen(false)}
         onDiscardDraft={handleDiscardDraft}
         onSuccess={(msg) => {
@@ -510,11 +529,18 @@ export default function App() {
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-4 right-4 z-50 rounded-xl px-4 py-2.5 text-xs font-medium text-white shadow-lg ${
-            toast.type === "error" ? "bg-rose-600" : "bg-slate-900"
+          className={`neu-card-lg fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-2xl px-4 py-3 text-xs font-semibold ${
+            toast.type === "error"
+              ? "border-[var(--neu-danger-border)] text-[var(--neu-danger-text)]"
+              : "border-[var(--neu-success-border)] text-[var(--neu-success-text)]"
           }`}
         >
-          {toast.text}
+          {toast.type === "error" ? (
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <span>{toast.text}</span>
         </div>
       )}
     </div>

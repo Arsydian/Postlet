@@ -1,8 +1,459 @@
 /**
  * @file src/client/styles/index.css
- * @description Tailwind CSS v4 base stylesheet and native <dialog> top-layer modal rules.
+ * @description Tailwind CSS v4 entry point and warm Tactile Soft UI (Neumorphic) design system
+ * with automatic Light/Dark color-scheme adaptation via `light-dark()`, `<meta name="color-scheme">`
+ * cascade mapping, accessible contrast, and Forced Colors Mode support.
  */
 @import "tailwindcss";
+
+/*
+ * Top-level color-scheme cascade & adaptive design tokens:
+ * Base `:root` keeps `color-scheme: light dark` so OS preference applies even without JS, while
+ * explicit `<meta name="color-scheme" content="light|dark">` overrides drive `light-dark()`,
+ * native controls, scrollbars, and pre-`light-dark()` custom property fallbacks.
+ */
+:root {
+  color-scheme: light dark;
+  --color-scheme: light;
+
+  /* Raw light & dark stone surfaces */
+  --neu-bg-light: #eae6df;
+  --neu-bg-dark: #1e1d1b;
+  --neu-surface-light: #ede9e2;
+  --neu-surface-dark: #23211f;
+  --neu-surface-raised-light: #f2efe9;
+  --neu-surface-raised-dark: #282623;
+  --neu-surface-hover-light: #f6f3ee;
+  --neu-surface-hover-dark: #302d2a;
+  --neu-inset-light: #e2ddd5;
+  --neu-inset-dark: #171614;
+  --neu-code-bg-light: #22201e;
+  --neu-code-bg-dark: #131210;
+
+  /* Raw ink tokens (>= 4.6:1 WCAG AA contrast on surfaces & wells) */
+  --neu-text-light: #2a2623;
+  --neu-text-dark: #f2eee8;
+  --neu-text-secondary-light: #575049;
+  --neu-text-secondary-dark: #c4bdb4;
+  --neu-text-muted-light: #645c54;
+  --neu-text-muted-dark: #9c948b;
+
+  /* Hairline rim borders & engraved dividers */
+  --neu-border-light: rgb(186 177 165 / 0.44);
+  --neu-border-dark: rgb(255 246 235 / 0.09);
+  --neu-border-strong-light: rgb(156 146 134 / 0.56);
+  --neu-border-strong-dark: rgb(255 246 235 / 0.16);
+  --neu-divider-light: rgb(179 170 158 / 0.36);
+  --neu-divider-dark: rgb(255 246 235 / 0.08);
+
+  /* Dual-light tactile shadows (extruded & debossed) */
+  --neu-hi-light: rgb(255 255 255 / 0.88);
+  --neu-hi-dark: rgb(255 248 238 / 0.065);
+  --neu-lo-light: rgb(173 163 149 / 0.54);
+  --neu-lo-dark: rgb(7 6 5 / 0.72);
+  --neu-inset-hi-light: rgb(255 255 255 / 0.82);
+  --neu-inset-hi-dark: rgb(255 248 238 / 0.055);
+  --neu-inset-lo-light: rgb(166 156 142 / 0.58);
+  --neu-inset-lo-dark: rgb(6 5 4 / 0.78);
+
+  /* Signature warm coral-orange hardware accent */
+  --neu-coral-glow-light: #f46a4e;
+  --neu-coral-glow-dark: #ff7557;
+  --neu-coral-halo-light: rgb(244 106 78 / 0.34);
+  --neu-coral-halo-dark: rgb(255 117 87 / 0.32);
+  --neu-coral-cta-top-light: #e05337;
+  --neu-coral-cta-top-dark: #e65a3d;
+  --neu-coral-cta-bot-light: #c93f25;
+  --neu-coral-cta-bot-dark: #cb4227;
+  --neu-coral-text-light: #be3b22;
+  --neu-coral-text-dark: #ff8e73;
+  --neu-coral-soft-bg-light: rgb(244 106 78 / 0.13);
+  --neu-coral-soft-bg-dark: rgb(255 117 87 / 0.16);
+  --neu-coral-soft-border-light: rgb(224 83 55 / 0.36);
+  --neu-coral-soft-border-dark: rgb(255 130 102 / 0.34);
+
+  /* Semantic status palette (warm-harmonized, >= 4.5:1 text contrast) */
+  --neu-success-bg-light: #dcefe4;
+  --neu-success-bg-dark: #193226;
+  --neu-success-border-light: #9ed4b8;
+  --neu-success-border-dark: #2c5b43;
+  --neu-success-text-light: #196e46;
+  --neu-success-text-dark: #78e8b4;
+  --neu-success-solid-light: #1f7a4f;
+  --neu-success-solid-dark: #1f7a4f;
+
+  --neu-warning-bg-light: #f6e7cf;
+  --neu-warning-bg-dark: #352713;
+  --neu-warning-border-light: #dfb87c;
+  --neu-warning-border-dark: #664a22;
+  --neu-warning-text-light: #894d0c;
+  --neu-warning-text-dark: #fcd27c;
+  --neu-warning-solid-light: #b46511;
+  --neu-warning-solid-dark: #b46511;
+
+  --neu-danger-bg-light: #f7dde2;
+  --neu-danger-bg-dark: #3b1921;
+  --neu-danger-border-light: #e4a3b0;
+  --neu-danger-border-dark: #702d3c;
+  --neu-danger-text-light: #a82038;
+  --neu-danger-text-dark: #fda4b4;
+  --neu-danger-solid-light: #be2540;
+  --neu-danger-solid-dark: #c82c48;
+
+  --neu-info-bg-light: #dbeaf4;
+  --neu-info-bg-dark: #162b3a;
+  --neu-info-border-light: #a2c8e2;
+  --neu-info-border-dark: #2c5673;
+  --neu-info-text-light: #1b5982;
+  --neu-info-text-dark: #85d6fc;
+
+  --neu-purple-bg-light: #ebe2f5;
+  --neu-purple-bg-dark: #2c203d;
+  --neu-purple-text-light: #5e3391;
+  --neu-purple-text-dark: #d0b3fc;
+
+  /* Scrollbars, focus ring & modal backdrop */
+  --neu-scroll-track-light: #e4dfd7;
+  --neu-scroll-track-dark: #191816;
+  --neu-scroll-thumb-light: #877e73;
+  --neu-scroll-thumb-dark: #6e675f;
+  --neu-focus-light: #c93f25;
+  --neu-focus-dark: #ff8e73;
+  --neu-backdrop-light: rgb(42 38 35 / 0.42);
+  --neu-backdrop-dark: rgb(6 5 4 / 0.68);
+
+  /* Semantic tokens: light defaults + media fallback before light-dark() override */
+  --neu-bg: var(--neu-bg-light);
+  --neu-surface: var(--neu-surface-light);
+  --neu-surface-raised: var(--neu-surface-raised-light);
+  --neu-surface-hover: var(--neu-surface-hover-light);
+  --neu-inset: var(--neu-inset-light);
+  --neu-code-bg: var(--neu-code-bg-light);
+  --neu-text: var(--neu-text-light);
+  --neu-text-secondary: var(--neu-text-secondary-light);
+  --neu-text-muted: var(--neu-text-muted-light);
+  --neu-border: var(--neu-border-light);
+  --neu-border-strong: var(--neu-border-strong-light);
+  --neu-divider: var(--neu-divider-light);
+  --neu-hi: var(--neu-hi-light);
+  --neu-lo: var(--neu-lo-light);
+  --neu-inset-hi: var(--neu-inset-hi-light);
+  --neu-inset-lo: var(--neu-inset-lo-light);
+  --neu-coral-glow: var(--neu-coral-glow-light);
+  --neu-coral-halo: var(--neu-coral-halo-light);
+  --neu-coral-cta-top: var(--neu-coral-cta-top-light);
+  --neu-coral-cta-bot: var(--neu-coral-cta-bot-light);
+  --neu-coral-text: var(--neu-coral-text-light);
+  --neu-coral-soft-bg: var(--neu-coral-soft-bg-light);
+  --neu-coral-soft-border: var(--neu-coral-soft-border-light);
+  --neu-success-bg: var(--neu-success-bg-light);
+  --neu-success-border: var(--neu-success-border-light);
+  --neu-success-text: var(--neu-success-text-light);
+  --neu-success-solid: var(--neu-success-solid-light);
+  --neu-warning-bg: var(--neu-warning-bg-light);
+  --neu-warning-border: var(--neu-warning-border-light);
+  --neu-warning-text: var(--neu-warning-text-light);
+  --neu-warning-solid: var(--neu-warning-solid-light);
+  --neu-danger-bg: var(--neu-danger-bg-light);
+  --neu-danger-border: var(--neu-danger-border-light);
+  --neu-danger-text: var(--neu-danger-text-light);
+  --neu-danger-solid: var(--neu-danger-solid-light);
+  --neu-info-bg: var(--neu-info-bg-light);
+  --neu-info-border: var(--neu-info-border-light);
+  --neu-info-text: var(--neu-info-text-light);
+  --neu-purple-bg: var(--neu-purple-bg-light);
+  --neu-purple-text: var(--neu-purple-text-light);
+  --neu-scroll-track: var(--neu-scroll-track-light);
+  --neu-scroll-thumb: var(--neu-scroll-thumb-light);
+  --neu-focus: var(--neu-focus-light);
+  --neu-backdrop: var(--neu-backdrop-light);
+
+  /* Checkbox SVG masks */
+  --neu-icon-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>");
+  --neu-icon-dash: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'><line x1='5' y1='12' x2='19' y2='12'></line></svg>");
+
+  scrollbar-color: var(--neu-scroll-thumb) var(--neu-scroll-track);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-scheme: dark;
+    --neu-bg: var(--neu-bg-dark);
+    --neu-surface: var(--neu-surface-dark);
+    --neu-surface-raised: var(--neu-surface-raised-dark);
+    --neu-surface-hover: var(--neu-surface-hover-dark);
+    --neu-inset: var(--neu-inset-dark);
+    --neu-code-bg: var(--neu-code-bg-dark);
+    --neu-text: var(--neu-text-dark);
+    --neu-text-secondary: var(--neu-text-secondary-dark);
+    --neu-text-muted: var(--neu-text-muted-dark);
+    --neu-border: var(--neu-border-dark);
+    --neu-border-strong: var(--neu-border-strong-dark);
+    --neu-divider: var(--neu-divider-dark);
+    --neu-hi: var(--neu-hi-dark);
+    --neu-lo: var(--neu-lo-dark);
+    --neu-inset-hi: var(--neu-inset-hi-dark);
+    --neu-inset-lo: var(--neu-inset-lo-dark);
+    --neu-coral-glow: var(--neu-coral-glow-dark);
+    --neu-coral-halo: var(--neu-coral-halo-dark);
+    --neu-coral-cta-top: var(--neu-coral-cta-top-dark);
+    --neu-coral-cta-bot: var(--neu-coral-cta-bot-dark);
+    --neu-coral-text: var(--neu-coral-text-dark);
+    --neu-coral-soft-bg: var(--neu-coral-soft-bg-dark);
+    --neu-coral-soft-border: var(--neu-coral-soft-border-dark);
+    --neu-success-bg: var(--neu-success-bg-dark);
+    --neu-success-border: var(--neu-success-border-dark);
+    --neu-success-text: var(--neu-success-text-dark);
+    --neu-success-solid: var(--neu-success-solid-dark);
+    --neu-warning-bg: var(--neu-warning-bg-dark);
+    --neu-warning-border: var(--neu-warning-border-dark);
+    --neu-warning-text: var(--neu-warning-text-dark);
+    --neu-warning-solid: var(--neu-warning-solid-dark);
+    --neu-danger-bg: var(--neu-danger-bg-dark);
+    --neu-danger-border: var(--neu-danger-border-dark);
+    --neu-danger-text: var(--neu-danger-text-dark);
+    --neu-danger-solid: var(--neu-danger-solid-dark);
+    --neu-info-bg: var(--neu-info-bg-dark);
+    --neu-info-border: var(--neu-info-border-dark);
+    --neu-info-text: var(--neu-info-text-dark);
+    --neu-purple-bg: var(--neu-purple-bg-dark);
+    --neu-purple-text: var(--neu-purple-text-dark);
+    --neu-scroll-track: var(--neu-scroll-track-dark);
+    --neu-scroll-thumb: var(--neu-scroll-thumb-dark);
+    --neu-focus: var(--neu-focus-dark);
+    --neu-backdrop: var(--neu-backdrop-dark);
+  }
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+  --color-scheme: dark;
+  --neu-bg: var(--neu-bg-dark);
+  --neu-surface: var(--neu-surface-dark);
+  --neu-surface-raised: var(--neu-surface-raised-dark);
+  --neu-surface-hover: var(--neu-surface-hover-dark);
+  --neu-inset: var(--neu-inset-dark);
+  --neu-code-bg: var(--neu-code-bg-dark);
+  --neu-text: var(--neu-text-dark);
+  --neu-text-secondary: var(--neu-text-secondary-dark);
+  --neu-text-muted: var(--neu-text-muted-dark);
+  --neu-border: var(--neu-border-dark);
+  --neu-border-strong: var(--neu-border-strong-dark);
+  --neu-divider: var(--neu-divider-dark);
+  --neu-hi: var(--neu-hi-dark);
+  --neu-lo: var(--neu-lo-dark);
+  --neu-inset-hi: var(--neu-inset-hi-dark);
+  --neu-inset-lo: var(--neu-inset-lo-dark);
+  --neu-coral-glow: var(--neu-coral-glow-dark);
+  --neu-coral-halo: var(--neu-coral-halo-dark);
+  --neu-coral-cta-top: var(--neu-coral-cta-top-dark);
+  --neu-coral-cta-bot: var(--neu-coral-cta-bot-dark);
+  --neu-coral-text: var(--neu-coral-text-dark);
+  --neu-coral-soft-bg: var(--neu-coral-soft-bg-dark);
+  --neu-coral-soft-border: var(--neu-coral-soft-border-dark);
+  --neu-success-bg: var(--neu-success-bg-dark);
+  --neu-success-border: var(--neu-success-border-dark);
+  --neu-success-text: var(--neu-success-text-dark);
+  --neu-success-solid: var(--neu-success-solid-dark);
+  --neu-warning-bg: var(--neu-warning-bg-dark);
+  --neu-warning-border: var(--neu-warning-border-dark);
+  --neu-warning-text: var(--neu-warning-text-dark);
+  --neu-warning-solid: var(--neu-warning-solid-dark);
+  --neu-danger-bg: var(--neu-danger-bg-dark);
+  --neu-danger-border: var(--neu-danger-border-dark);
+  --neu-danger-text: var(--neu-danger-text-dark);
+  --neu-danger-solid: var(--neu-danger-solid-dark);
+  --neu-info-bg: var(--neu-info-bg-dark);
+  --neu-info-border: var(--neu-info-border-dark);
+  --neu-info-text: var(--neu-info-text-dark);
+  --neu-purple-bg: var(--neu-purple-bg-dark);
+  --neu-purple-text: var(--neu-purple-text-dark);
+  --neu-scroll-track: var(--neu-scroll-track-dark);
+  --neu-scroll-thumb: var(--neu-scroll-thumb-dark);
+  --neu-focus: var(--neu-focus-dark);
+  --neu-backdrop: var(--neu-backdrop-dark);
+}
+
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
+  --color-scheme: light;
+  --neu-bg: var(--neu-bg-light);
+  --neu-surface: var(--neu-surface-light);
+  --neu-surface-raised: var(--neu-surface-raised-light);
+  --neu-surface-hover: var(--neu-surface-hover-light);
+  --neu-inset: var(--neu-inset-light);
+  --neu-code-bg: var(--neu-code-bg-light);
+  --neu-text: var(--neu-text-light);
+  --neu-text-secondary: var(--neu-text-secondary-light);
+  --neu-text-muted: var(--neu-text-muted-light);
+  --neu-border: var(--neu-border-light);
+  --neu-border-strong: var(--neu-border-strong-light);
+  --neu-divider: var(--neu-divider-light);
+  --neu-hi: var(--neu-hi-light);
+  --neu-lo: var(--neu-lo-light);
+  --neu-inset-hi: var(--neu-inset-hi-light);
+  --neu-inset-lo: var(--neu-inset-lo-light);
+  --neu-coral-glow: var(--neu-coral-glow-light);
+  --neu-coral-halo: var(--neu-coral-halo-light);
+  --neu-coral-cta-top: var(--neu-coral-cta-top-light);
+  --neu-coral-cta-bot: var(--neu-coral-cta-bot-light);
+  --neu-coral-text: var(--neu-coral-text-light);
+  --neu-coral-soft-bg: var(--neu-coral-soft-bg-light);
+  --neu-coral-soft-border: var(--neu-coral-soft-border-light);
+  --neu-success-bg: var(--neu-success-bg-light);
+  --neu-success-border: var(--neu-success-border-light);
+  --neu-success-text: var(--neu-success-text-light);
+  --neu-success-solid: var(--neu-success-solid-light);
+  --neu-warning-bg: var(--neu-warning-bg-light);
+  --neu-warning-border: var(--neu-warning-border-light);
+  --neu-warning-text: var(--neu-warning-text-light);
+  --neu-warning-solid: var(--neu-warning-solid-light);
+  --neu-danger-bg: var(--neu-danger-bg-light);
+  --neu-danger-border: var(--neu-danger-border-light);
+  --neu-danger-text: var(--neu-danger-text-light);
+  --neu-danger-solid: var(--neu-danger-solid-light);
+  --neu-info-bg: var(--neu-info-bg-light);
+  --neu-info-border: var(--neu-info-border-light);
+  --neu-info-text: var(--neu-info-text-light);
+  --neu-purple-bg: var(--neu-purple-bg-light);
+  --neu-purple-text: var(--neu-purple-text-light);
+  --neu-scroll-track: var(--neu-scroll-track-light);
+  --neu-scroll-thumb: var(--neu-scroll-thumb-light);
+  --neu-focus: var(--neu-focus-light);
+  --neu-backdrop: var(--neu-backdrop-light);
+}
+
+/* Native light-dark() token binding when supported */
+@supports (color: light-dark(white, black)) {
+  :where(:root) {
+    --neu-bg: light-dark(var(--neu-bg-light), var(--neu-bg-dark));
+    --neu-surface: light-dark(var(--neu-surface-light), var(--neu-surface-dark));
+    --neu-surface-raised: light-dark(
+      var(--neu-surface-raised-light),
+      var(--neu-surface-raised-dark)
+    );
+    --neu-surface-hover: light-dark(var(--neu-surface-hover-light), var(--neu-surface-hover-dark));
+    --neu-inset: light-dark(var(--neu-inset-light), var(--neu-inset-dark));
+    --neu-code-bg: light-dark(var(--neu-code-bg-light), var(--neu-code-bg-dark));
+    --neu-text: light-dark(var(--neu-text-light), var(--neu-text-dark));
+    --neu-text-secondary: light-dark(
+      var(--neu-text-secondary-light),
+      var(--neu-text-secondary-dark)
+    );
+    --neu-text-muted: light-dark(var(--neu-text-muted-light), var(--neu-text-muted-dark));
+    --neu-border: light-dark(var(--neu-border-light), var(--neu-border-dark));
+    --neu-border-strong: light-dark(var(--neu-border-strong-light), var(--neu-border-strong-dark));
+    --neu-divider: light-dark(var(--neu-divider-light), var(--neu-divider-dark));
+    --neu-hi: light-dark(var(--neu-hi-light), var(--neu-hi-dark));
+    --neu-lo: light-dark(var(--neu-lo-light), var(--neu-lo-dark));
+    --neu-inset-hi: light-dark(var(--neu-inset-hi-light), var(--neu-inset-hi-dark));
+    --neu-inset-lo: light-dark(var(--neu-inset-lo-light), var(--neu-inset-lo-dark));
+    --neu-coral-glow: light-dark(var(--neu-coral-glow-light), var(--neu-coral-glow-dark));
+    --neu-coral-halo: light-dark(var(--neu-coral-halo-light), var(--neu-coral-halo-dark));
+    --neu-coral-cta-top: light-dark(var(--neu-coral-cta-top-light), var(--neu-coral-cta-top-dark));
+    --neu-coral-cta-bot: light-dark(var(--neu-coral-cta-bot-light), var(--neu-coral-cta-bot-dark));
+    --neu-coral-text: light-dark(var(--neu-coral-text-light), var(--neu-coral-text-dark));
+    --neu-coral-soft-bg: light-dark(var(--neu-coral-soft-bg-light), var(--neu-coral-soft-bg-dark));
+    --neu-coral-soft-border: light-dark(
+      var(--neu-coral-soft-border-light),
+      var(--neu-coral-soft-border-dark)
+    );
+    --neu-success-bg: light-dark(var(--neu-success-bg-light), var(--neu-success-bg-dark));
+    --neu-success-border: light-dark(
+      var(--neu-success-border-light),
+      var(--neu-success-border-dark)
+    );
+    --neu-success-text: light-dark(var(--neu-success-text-light), var(--neu-success-text-dark));
+    --neu-success-solid: light-dark(var(--neu-success-solid-light), var(--neu-success-solid-dark));
+    --neu-warning-bg: light-dark(var(--neu-warning-bg-light), var(--neu-warning-bg-dark));
+    --neu-warning-border: light-dark(
+      var(--neu-warning-border-light),
+      var(--neu-warning-border-dark)
+    );
+    --neu-warning-text: light-dark(var(--neu-warning-text-light), var(--neu-warning-text-dark));
+    --neu-warning-solid: light-dark(var(--neu-warning-solid-light), var(--neu-warning-solid-dark));
+    --neu-danger-bg: light-dark(var(--neu-danger-bg-light), var(--neu-danger-bg-dark));
+    --neu-danger-border: light-dark(var(--neu-danger-border-light), var(--neu-danger-border-dark));
+    --neu-danger-text: light-dark(var(--neu-danger-text-light), var(--neu-danger-text-dark));
+    --neu-danger-solid: light-dark(var(--neu-danger-solid-light), var(--neu-danger-solid-dark));
+    --neu-info-bg: light-dark(var(--neu-info-bg-light), var(--neu-info-bg-dark));
+    --neu-info-border: light-dark(var(--neu-info-border-light), var(--neu-info-border-dark));
+    --neu-info-text: light-dark(var(--neu-info-text-light), var(--neu-info-text-dark));
+    --neu-purple-bg: light-dark(var(--neu-purple-bg-light), var(--neu-purple-bg-dark));
+    --neu-purple-text: light-dark(var(--neu-purple-text-light), var(--neu-purple-text-dark));
+    --neu-scroll-track: light-dark(var(--neu-scroll-track-light), var(--neu-scroll-track-dark));
+    --neu-scroll-thumb: light-dark(var(--neu-scroll-thumb-light), var(--neu-scroll-thumb-dark));
+    --neu-focus: light-dark(var(--neu-focus-light), var(--neu-focus-dark));
+    --neu-backdrop: light-dark(var(--neu-backdrop-light), var(--neu-backdrop-dark));
+  }
+}
+
+/*
+ * Critical non-color branching helpers (`.if-dark` / `.if-light`) paired with `:has()` +
+ * `prefers-color-scheme` so they work uniformly across all browsers even before style queries.
+ */
+.if-light {
+  display: inline-flex;
+}
+
+.if-dark {
+  display: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(:has(> head > meta[name="color-scheme"][content="light"])) .if-dark {
+    display: inline-flex !important;
+  }
+
+  :root:not(:has(> head > meta[name="color-scheme"][content="light"])) .if-light {
+    display: none !important;
+  }
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) .if-dark {
+  display: inline-flex !important;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) .if-light {
+  display: none !important;
+}
+
+/* Legacy scrollbar fallback only when standard `scrollbar-color` is unsupported */
+@supports not (scrollbar-color: auto) {
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--neu-scroll-track);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--neu-scroll-thumb);
+    border-radius: 9999px;
+  }
+}
+
+@layer base {
+  html {
+    accent-color: var(--neu-coral-cta-top);
+  }
+
+  body {
+    background-color: var(--neu-bg);
+    color: var(--neu-text);
+  }
+
+  ::selection {
+    background-color: var(--neu-coral-soft-bg);
+    color: var(--neu-coral-text);
+  }
+
+  ::placeholder {
+    color: var(--neu-text-muted);
+  }
+}
 
 /*
  * Native modal <dialog> scroll containment per modern-web-guidance:
@@ -16,15 +467,653 @@ dialog:modal {
 dialog::backdrop {
   overflow: hidden;
   overscroll-behavior: contain;
-  background: rgb(15 23 42 / 0.48);
-  backdrop-filter: blur(2px);
+  background: var(--neu-backdrop);
+  backdrop-filter: blur(4px);
+}
+
+@layer components {
+  .neu-canvas {
+    background-color: var(--neu-bg);
+    color: var(--neu-text);
+  }
+
+  .neu-panel {
+    background-color: var(--neu-surface);
+    color: var(--neu-text);
+  }
+
+  .neu-card {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -5px -5px 12px var(--neu-hi),
+      5px 5px 12px var(--neu-lo);
+  }
+
+  .neu-card-lg {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -10px -10px 24px var(--neu-hi),
+      10px 10px 24px var(--neu-lo);
+  }
+
+  .neu-inset {
+    background-color: var(--neu-inset);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      inset 3px 3px 7px var(--neu-inset-lo),
+      inset -3px -3px 7px var(--neu-inset-hi);
+  }
+
+  /* Signature raised outer pill bezel enclosing a recessed matte search well */
+  .neu-search-bezel {
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 9999px;
+    background-color: var(--neu-surface-raised);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -4px -4px 10px var(--neu-hi),
+      4px 4px 10px var(--neu-lo);
+  }
+
+  .neu-search-well {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    border-radius: 9999px;
+    background-color: var(--neu-inset);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      inset 2.5px 2.5px 6px var(--neu-inset-lo),
+      inset -2.5px -2.5px 6px var(--neu-inset-hi);
+  }
+
+  .neu-search-well:focus-within {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 1px;
+    border-color: var(--neu-coral-soft-border);
+  }
+
+  .neu-input {
+    background-color: var(--neu-inset);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      inset 2.5px 2.5px 6px var(--neu-inset-lo),
+      inset -2.5px -2.5px 6px var(--neu-inset-hi);
+  }
+
+  .neu-input:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 1px;
+    border-color: var(--neu-coral-soft-border);
+  }
+
+  .neu-btn {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -3px -3px 8px var(--neu-hi),
+      3px 3px 8px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-btn:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-btn:active:not(:disabled) {
+    background-color: var(--neu-inset);
+    box-shadow:
+      inset 2.5px 2.5px 6px var(--neu-inset-lo),
+      inset -2.5px -2.5px 6px var(--neu-inset-hi);
+  }
+
+  .neu-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Signature luminous coral CTA button */
+  .neu-btn-accent {
+    background: linear-gradient(145deg, var(--neu-coral-cta-top), var(--neu-coral-cta-bot));
+    color: #ffffff;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    box-shadow:
+      -3px -3px 8px var(--neu-hi),
+      3px 3px 10px var(--neu-lo),
+      0 4px 14px var(--neu-coral-halo);
+    cursor: pointer;
+  }
+
+  .neu-btn-accent:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-btn-accent:active:not(:disabled) {
+    filter: brightness(0.95);
+    box-shadow:
+      inset 2px 2px 5px rgb(0 0 0 / 0.28),
+      0 2px 8px var(--neu-coral-halo);
+  }
+
+  .neu-btn-accent:disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
+  }
+
+  .neu-btn-soft-coral {
+    background-color: var(--neu-coral-soft-bg);
+    color: var(--neu-coral-text);
+    border: 1px solid var(--neu-coral-soft-border);
+    box-shadow:
+      -2px -2px 6px var(--neu-hi),
+      2px 2px 6px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-btn-soft-coral:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-btn-soft-coral:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .neu-btn-success {
+    background-color: var(--neu-success-solid);
+    color: #ffffff;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    box-shadow:
+      -3px -3px 8px var(--neu-hi),
+      3px 3px 8px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-btn-success:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-btn-success:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .neu-btn-danger {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-danger-text);
+    border: 1px solid var(--neu-danger-border);
+    box-shadow:
+      -3px -3px 7px var(--neu-hi),
+      3px 3px 7px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-btn-danger:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .neu-btn-danger-solid {
+    background-color: var(--neu-danger-solid);
+    color: #ffffff;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    box-shadow:
+      -3px -3px 8px var(--neu-hi),
+      3px 3px 8px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-btn-danger-solid:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-btn-danger-solid:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Circular extruded tactile icon control */
+  .neu-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text-secondary);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -3px -3px 7px var(--neu-hi),
+      3px 3px 7px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-icon-btn:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-icon-btn:active:not(:disabled) {
+    background-color: var(--neu-inset);
+    box-shadow:
+      inset 2px 2px 5px var(--neu-inset-lo),
+      inset -2px -2px 5px var(--neu-inset-hi);
+  }
+
+  .neu-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Tactile sidebar nav item with glowing coral active state */
+  .neu-nav-item {
+    position: relative;
+    color: var(--neu-text-secondary);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .neu-nav-item:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 1px;
+  }
+
+  .neu-nav-item[data-active="true"] {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+    border-color: var(--neu-coral-soft-border);
+    box-shadow:
+      -4px -4px 10px var(--neu-hi),
+      4px 4px 10px var(--neu-lo);
+  }
+
+  .neu-nav-item[data-active="true"]::before {
+    content: "";
+    position: absolute;
+    inset-block: 8px;
+    inset-inline-start: 6px;
+    inline-size: 3px;
+    border-radius: 9999px;
+    background: var(--neu-coral-glow);
+    box-shadow: 0 0 8px var(--neu-coral-halo);
+  }
+
+  /* Sculpted segmented pill bar with glowing coral indicator matching reference image */
+  .neu-segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 9999px;
+    background-color: var(--neu-inset);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      inset 3px 3px 6px var(--neu-inset-lo),
+      inset -3px -3px 6px var(--neu-inset-hi);
+  }
+
+  .neu-segmented-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 9999px;
+    color: var(--neu-text-secondary);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .neu-segmented-btn:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 1px;
+  }
+
+  .neu-segmented-btn[data-active="true"] {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+    border-color: var(--neu-border);
+    box-shadow:
+      -2px -2px 6px var(--neu-hi),
+      2px 2px 6px var(--neu-lo);
+  }
+
+  .neu-segmented-btn[data-active="true"]::after {
+    content: "";
+    display: inline-block;
+    inline-size: 14px;
+    block-size: 3.5px;
+    border-radius: 9999px;
+    background: var(--neu-coral-glow);
+    box-shadow: 0 0 8px var(--neu-coral-halo);
+  }
+
+  /* Conversation cards in ThreadList */
+  .neu-thread-card {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -3px -3px 8px var(--neu-hi),
+      3px 3px 8px var(--neu-lo);
+    cursor: pointer;
+  }
+
+  .neu-thread-card:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-thread-card[data-selected="true"] {
+    background-color: var(--neu-inset);
+    border-color: var(--neu-coral-soft-border);
+    box-shadow:
+      inset 3px 3px 7px var(--neu-inset-lo),
+      inset -3px -3px 7px var(--neu-inset-hi),
+      0 0 0 1px var(--neu-coral-soft-border);
+  }
+
+  /* Tactile hardware toggle switch (glowing coral capsule + raised sliding thumb) */
+  .neu-switch {
+    appearance: none;
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    inline-size: 46px;
+    block-size: 26px;
+    margin: 0;
+    border-radius: 9999px;
+    background-color: var(--neu-inset);
+    border: 1px solid var(--neu-border-strong);
+    box-shadow:
+      inset 2.5px 2.5px 6px var(--neu-inset-lo),
+      inset -2px -2px 5px var(--neu-inset-hi);
+    cursor: pointer;
+  }
+
+  .neu-switch::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 2px;
+    inset-inline-start: 2px;
+    inline-size: 20px;
+    block-size: 20px;
+    border-radius: 9999px;
+    background-color: var(--neu-surface-raised);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      -2px -2px 5px var(--neu-hi),
+      2px 2px 5px var(--neu-lo);
+  }
+
+  .neu-switch:checked {
+    background: linear-gradient(145deg, var(--neu-coral-cta-top), var(--neu-coral-glow));
+    border-color: var(--neu-coral-soft-border);
+    box-shadow:
+      inset 1.5px 1.5px 4px rgb(0 0 0 / 0.22),
+      0 0 12px var(--neu-coral-halo);
+  }
+
+  .neu-switch:checked::before {
+    transform: translateX(20px);
+    background-color: #ffffff;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.28);
+  }
+
+  .neu-switch:focus-visible {
+    outline: 3px solid var(--neu-focus);
+    outline-offset: 3px;
+  }
+
+  .neu-switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Custom tactile checkbox matching modern-web-guidance `checkbox` guide */
+  .neu-checkbox {
+    --checkbox-size: 1.25em;
+    --checkbox-icon-size: 0.72em;
+    appearance: none;
+    flex-shrink: 0;
+    display: inline-grid;
+    place-content: center;
+    inline-size: var(--checkbox-size);
+    aspect-ratio: 1;
+    margin: 0;
+    border-radius: 6px;
+    background-color: var(--neu-inset);
+    border: 1.5px solid var(--neu-border-strong);
+    box-shadow:
+      inset 2px 2px 4px var(--neu-inset-lo),
+      inset -2px -2px 4px var(--neu-inset-hi);
+    cursor: pointer;
+  }
+
+  .neu-checkbox::before {
+    content: "";
+    inline-size: var(--checkbox-icon-size);
+    aspect-ratio: 1;
+    background-color: #ffffff;
+    mask: var(--neu-icon-check) no-repeat center / contain;
+    scale: 0;
+  }
+
+  .neu-checkbox:checked {
+    --neu-checkbox-mask: var(--neu-icon-check);
+    background: linear-gradient(145deg, var(--neu-coral-cta-top), var(--neu-coral-cta-bot));
+    border-color: var(--neu-coral-soft-border);
+    box-shadow: 0 2px 8px var(--neu-coral-halo);
+  }
+
+  .neu-checkbox:indeterminate::before {
+    mask: var(--neu-icon-dash) no-repeat center / contain;
+  }
+
+  .neu-checkbox:is(:checked, :indeterminate)::before {
+    scale: 1;
+  }
+
+  .neu-checkbox:focus-visible {
+    outline: 2px solid var(--neu-focus);
+    outline-offset: 2px;
+  }
+
+  .neu-checkbox:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Glowing coral progress track */
+  .neu-progress-track {
+    overflow: hidden;
+    border-radius: 9999px;
+    background-color: var(--neu-inset);
+    border: 1px solid var(--neu-border);
+    box-shadow:
+      inset 2px 2px 4px var(--neu-inset-lo),
+      inset -2px -2px 4px var(--neu-inset-hi);
+  }
+
+  .neu-progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--neu-coral-cta-top), var(--neu-coral-glow));
+    box-shadow: 0 0 10px var(--neu-coral-halo);
+  }
+
+  /* Tactile badges */
+  .neu-badge {
+    background-color: var(--neu-inset);
+    color: var(--neu-text-secondary);
+    border: 1px solid var(--neu-border);
+  }
+
+  .neu-badge-coral {
+    background-color: var(--neu-coral-soft-bg);
+    color: var(--neu-coral-text);
+    border: 1px solid var(--neu-coral-soft-border);
+  }
+
+  .neu-badge-coral-solid {
+    background: linear-gradient(145deg, var(--neu-coral-cta-top), var(--neu-coral-cta-bot));
+    color: #ffffff;
+    box-shadow: 0 2px 8px var(--neu-coral-halo);
+  }
+
+  .neu-badge-success {
+    background-color: var(--neu-success-bg);
+    color: var(--neu-success-text);
+    border: 1px solid var(--neu-success-border);
+  }
+
+  .neu-badge-warning {
+    background-color: var(--neu-warning-bg);
+    color: var(--neu-warning-text);
+    border: 1px solid var(--neu-warning-border);
+  }
+
+  .neu-badge-danger {
+    background-color: var(--neu-danger-bg);
+    color: var(--neu-danger-text);
+    border: 1px solid var(--neu-danger-border);
+  }
+
+  .neu-badge-info {
+    background-color: var(--neu-info-bg);
+    color: var(--neu-info-text);
+    border: 1px solid var(--neu-info-border);
+  }
+
+  .neu-badge-purple {
+    background-color: var(--neu-purple-bg);
+    color: var(--neu-purple-text);
+    border: 1px solid var(--neu-border);
+  }
+
+  .neu-alert-warning {
+    background-color: var(--neu-warning-bg);
+    color: var(--neu-warning-text);
+    border: 1px solid var(--neu-warning-border);
+    box-shadow:
+      -4px -4px 10px var(--neu-hi),
+      4px 4px 10px var(--neu-lo);
+  }
+
+  .neu-alert-success {
+    background-color: var(--neu-success-bg);
+    color: var(--neu-success-text);
+    border: 1px solid var(--neu-success-border);
+    box-shadow:
+      -4px -4px 10px var(--neu-hi),
+      4px 4px 10px var(--neu-lo);
+  }
+
+  .neu-alert-coral {
+    background-color: var(--neu-coral-soft-bg);
+    color: var(--neu-text);
+    border: 1px solid var(--neu-coral-soft-border);
+  }
+
+  .neu-code-block {
+    background-color: var(--neu-code-bg);
+    color: #f2eee8;
+    border: 1px solid var(--neu-border-strong);
+    box-shadow:
+      inset 3px 3px 8px rgb(0 0 0 / 0.55),
+      inset -2px -2px 5px rgb(255 248 238 / 0.05);
+  }
+
+  .neu-coral-dot {
+    background-color: var(--neu-coral-glow);
+    box-shadow: 0 0 8px var(--neu-coral-halo);
+  }
+}
+
+@media (hover: hover) {
+  .neu-btn:hover:not(:disabled),
+  .neu-icon-btn:hover:not(:disabled),
+  .neu-thread-card:not([data-selected="true"]):hover {
+    background-color: var(--neu-surface-hover);
+  }
+
+  .neu-btn-accent:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+
+  .neu-btn-soft-coral:hover:not(:disabled) {
+    filter: brightness(1.04);
+  }
+
+  .neu-btn-success:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .neu-btn-danger:hover:not(:disabled) {
+    background-color: var(--neu-danger-bg);
+  }
+
+  .neu-btn-danger-solid:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .neu-nav-item:not([data-active="true"]):hover {
+    background-color: var(--neu-surface-raised);
+    color: var(--neu-text);
+  }
+
+  .neu-segmented-btn:not([data-active="true"]):hover {
+    color: var(--neu-text);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .neu-btn,
+  .neu-btn-accent,
+  .neu-btn-soft-coral,
+  .neu-btn-success,
+  .neu-btn-danger,
+  .neu-btn-danger-solid,
+  .neu-icon-btn,
+  .neu-nav-item,
+  .neu-segmented-btn,
+  .neu-thread-card,
+  .neu-switch,
+  .neu-switch::before,
+  .neu-checkbox::before {
+    transition:
+      background-color 140ms ease,
+      color 140ms ease,
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      transform 160ms ease,
+      scale 140ms ease,
+      filter 140ms ease;
+  }
 }
 
 /*
  * Accessible formatting toolbar styles per modern-web-guidance `toolbar` guide:
  * minimum 28x28 target sizes (36x36 on touch), visible :focus-visible outline,
- * ARIA-driven [aria-pressed="true"] states, border-drawn separators, and
- * media-gated hover / reduced-motion transitions.
+ * ARIA-driven [aria-pressed="true"] states, border-drawn separators, and adaptive tokens.
  */
 .postlet-toolbar-btn {
   display: inline-flex;
@@ -33,22 +1122,25 @@ dialog::backdrop {
   min-inline-size: 28px;
   min-block-size: 28px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid transparent;
-  color: rgb(51 65 85);
+  color: var(--neu-text-secondary);
   background: transparent;
   cursor: pointer;
 }
 
 .postlet-toolbar-btn:focus-visible {
-  outline: 2px solid rgb(79 70 229);
+  outline: 2px solid var(--neu-focus);
   outline-offset: 2px;
 }
 
 .postlet-toolbar-btn[aria-pressed="true"] {
-  background: rgb(238 242 255);
-  color: rgb(67 56 202);
-  box-shadow: inset 0 0 0 1.5px rgb(79 70 229);
+  background: var(--neu-coral-soft-bg);
+  color: var(--neu-coral-text);
+  border-color: var(--neu-coral-soft-border);
+  box-shadow:
+    inset 1.5px 1.5px 3px var(--neu-inset-lo),
+    inset -1.5px -1.5px 3px var(--neu-inset-hi);
 }
 
 .postlet-toolbar-sep {
@@ -56,17 +1148,17 @@ dialog::backdrop {
   align-self: stretch;
   inline-size: 0;
   margin: 3px 2px;
-  border-inline-start: 1px solid rgb(203 213 225);
+  border-inline-start: 1px solid var(--neu-border-strong);
 }
 
 @media (hover: hover) {
   .postlet-toolbar-btn:hover {
-    background: rgb(241 245 249);
-    color: rgb(15 23 42);
+    background: var(--neu-surface-raised);
+    color: var(--neu-text);
   }
 
   .postlet-toolbar-btn[aria-pressed="true"]:hover {
-    background: rgb(224 231 255);
+    background: var(--neu-coral-soft-bg);
   }
 }
 
@@ -83,20 +1175,6 @@ dialog::backdrop {
   }
 }
 
-@media (forced-colors: active) {
-  .postlet-toolbar-btn {
-    color: ButtonText;
-    border-color: ButtonText;
-  }
-
-  .postlet-toolbar-btn[aria-pressed="true"] {
-    background: Highlight;
-    color: HighlightText;
-    border-color: Highlight;
-    forced-color-adjust: none;
-  }
-}
-
 /* Rich text email canvas typography */
 .postlet-richtext {
   min-height: 210px;
@@ -105,13 +1183,13 @@ dialog::backdrop {
   outline: none;
   font-size: 14px;
   line-height: 1.6;
-  color: rgb(15 23 42);
+  color: var(--neu-text);
   word-break: break-word;
 }
 
 .postlet-richtext:empty::before {
   content: attr(data-placeholder);
-  color: rgb(148 163 184);
+  color: var(--neu-text-muted);
   pointer-events: none;
 }
 
@@ -127,7 +1205,7 @@ dialog::backdrop {
   font-size: 1.125rem;
   font-weight: 700;
   margin: 0.5rem 0;
-  color: rgb(15 23 42);
+  color: var(--neu-text);
 }
 
 .postlet-richtext ul {
@@ -143,22 +1221,23 @@ dialog::backdrop {
 }
 
 .postlet-richtext blockquote {
-  border-left: 3px solid rgb(203 213 225);
+  border-left: 3px solid var(--neu-coral-soft-border);
   padding-left: 0.75rem;
   margin: 0.5rem 0;
-  color: rgb(71 85 105);
+  color: var(--neu-text-secondary);
 }
 
 .postlet-richtext code {
-  background: rgb(241 245 249);
-  border-radius: 4px;
+  background: var(--neu-surface-raised);
+  border: 1px solid var(--neu-border);
+  border-radius: 5px;
   padding: 0.1rem 0.35rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85em;
 }
 
 .postlet-richtext a {
-  color: rgb(79 70 229);
+  color: var(--neu-coral-text);
   text-decoration: underline;
 }
 
@@ -169,4 +1248,103 @@ dialog::backdrop {
 .postlet-richtext s,
 .postlet-richtext strike {
   text-decoration: line-through;
+}
+
+/*
+ * Forced Colors Mode (Windows High Contrast): shadows are stripped by the UA, so restore explicit
+ * system borders and state highlights on every surface, toggle, checkbox, and segmented button.
+ */
+@media (forced-colors: active) {
+  .neu-card,
+  .neu-card-lg,
+  .neu-inset,
+  .neu-input,
+  .neu-search-bezel,
+  .neu-search-well,
+  .neu-btn,
+  .neu-btn-accent,
+  .neu-btn-soft-coral,
+  .neu-btn-success,
+  .neu-btn-danger,
+  .neu-btn-danger-solid,
+  .neu-icon-btn,
+  .neu-segmented,
+  .neu-thread-card,
+  .neu-progress-track,
+  .neu-badge,
+  .neu-badge-coral,
+  .neu-badge-coral-solid,
+  .neu-badge-success,
+  .neu-badge-warning,
+  .neu-badge-danger,
+  .neu-badge-info,
+  .neu-badge-purple,
+  .neu-alert-warning,
+  .neu-alert-success,
+  .neu-alert-coral {
+    border: 1px solid ButtonBorder;
+    box-shadow: none;
+  }
+
+  .neu-nav-item[data-active="true"],
+  .neu-segmented-btn[data-active="true"],
+  .neu-thread-card[data-selected="true"] {
+    border: 2px solid Highlight;
+    background-color: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .neu-switch {
+    border: 2px solid ButtonText;
+    background-color: Canvas;
+    box-shadow: none;
+  }
+
+  .neu-switch::before {
+    border: 2px solid ButtonText;
+    background-color: ButtonText;
+    box-shadow: none;
+  }
+
+  .neu-switch:checked {
+    background-color: Highlight;
+    border-color: Highlight;
+  }
+
+  .neu-switch:checked::before {
+    background-color: HighlightText;
+    border-color: HighlightText;
+  }
+
+  .neu-checkbox {
+    border: 2px solid ButtonText;
+    background-color: Canvas;
+    box-shadow: none;
+  }
+
+  .neu-checkbox::before {
+    background-color: CanvasText;
+  }
+
+  .neu-checkbox:checked {
+    background-color: Highlight;
+    border-color: Highlight;
+  }
+
+  .neu-checkbox:checked::before {
+    background-color: HighlightText;
+  }
+
+  .postlet-toolbar-btn {
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+
+  .postlet-toolbar-btn[aria-pressed="true"] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+    forced-color-adjust: none;
+  }
 }

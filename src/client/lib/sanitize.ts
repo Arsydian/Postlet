@@ -181,36 +181,48 @@ export function hasRemoteImages(rawHtml: string): boolean {
  */
 export function buildEmailIframeSrcDoc(
   sanitizedBody: string,
-  options?: { allowRemoteImages?: boolean },
+  options?: { allowRemoteImages?: boolean; theme?: "light" | "dark" },
 ): string {
   const imgSrc = options?.allowRemoteImages ? "https: http: data: cid:" : "data: cid:";
+  const theme = options?.theme ?? "light";
+  const isDark = theme === "dark";
+  const bg = isDark ? "#1f1d1b" : "#f6f3ee";
+  const fg = isDark ? "#ece7df" : "#2a2623";
+  const linkColor = isDark ? "#ff8e73" : "#be3b22";
+  const quoteBorder = isDark ? "#544e47" : "#c9c0b4";
+  const quoteColor = isDark ? "#c4bdb4" : "#575049";
+  const codeBg = isDark ? "#2c2926" : "#e8e3db";
+  const tableBorder = isDark ? "#3b3732" : "#d8d1c7";
+
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="color-scheme" content="${theme}" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline';" />
     <base target="_blank" rel="noopener noreferrer" />
     <style>
-      :root { color-scheme: light; }
+      :root { color-scheme: ${theme}; }
       body {
         margin: 0;
-        padding: 4px 2px;
+        padding: 12px 14px;
+        background: ${bg};
+        color: ${fg};
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
         font-size: 14px;
         line-height: 1.6;
-        color: #1e293b;
         word-break: break-word;
       }
-      a { color: #4f46e5; text-decoration: underline; }
-      img { max-width: 100%; height: auto; border-radius: 6px; }
+      a { color: ${linkColor}; text-decoration: underline; }
+      img { max-width: 100%; height: auto; border-radius: 8px; }
       blockquote {
         margin: 12px 0;
         padding-left: 12px;
-        border-left: 3px solid #cbd5e1;
-        color: #475569;
+        border-left: 3px solid ${quoteBorder};
+        color: ${quoteColor};
       }
       pre, code {
-        background: #f1f5f9;
+        background: ${codeBg};
         border-radius: 6px;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 13px;
@@ -218,7 +230,7 @@ export function buildEmailIframeSrcDoc(
       pre { padding: 10px 12px; overflow-x: auto; }
       code { padding: 2px 5px; }
       table { border-collapse: collapse; max-width: 100%; }
-      th, td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+      th, td { border: 1px solid ${tableBorder}; padding: 6px 10px; text-align: left; }
     </style>
   </head>
   <body>${sanitizedBody}</body>

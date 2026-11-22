@@ -1,8 +1,8 @@
 /**
  * @file src/client/components/settings/AiAgentTab.tsx
- * @description Settings tab for Postlet's built-in Cloudflare Workers AI agent (`postlet-ai`).
- * Disabled initially by default; provides master toggle, free-tier daily cap meter,
- * Auto-Triage toggle, Daily Inbox Summary configuration, and Important Email Auto-Reply settings.
+ * @description Tactile Soft UI settings tab for Postlet's built-in Cloudflare Workers AI agent
+ * (`postlet-ai`). Provides tactile hardware toggle switches, glowing coral daily cap meter,
+ * Auto-Triage, Daily Inbox Summary configuration, and Important Email Auto-Reply settings.
  */
 
 import { Bot, CalendarClock, MailCheck, ShieldCheck, Sparkles } from "lucide-react";
@@ -126,35 +126,34 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
   return (
     <div className="space-y-6">
       {/* Master Toggle Banner */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="neu-card rounded-2xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div
-              className={`mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl ${
-                aiEnabled ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
+              className={`mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl ${
+                aiEnabled ? "neu-btn-accent" : "neu-inset text-[var(--neu-text-muted)]"
               }`}
             >
-              <Bot className="h-5 w-5" />
+              <Bot className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-slate-900">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-[var(--neu-text)]">
                   Cloudflare Workers AI Agent (Default)
                 </h2>
                 <span
                   className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                    aiEnabled
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-slate-100 text-slate-600"
+                    aiEnabled ? "neu-badge-success" : "neu-badge"
                   }`}
                 >
                   {aiEnabled ? "Enabled" : "Disabled (Default)"}
                 </span>
               </div>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
-                Uses your native Cloudflare <code className="rounded bg-slate-100 px-1">AI</code>{" "}
-                binding (10,000 free Neurons/day included on Cloudflare Workers). Disabled initially
-                so zero inference runs until you toggle it on.
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--neu-text-muted)]">
+                Uses your native Cloudflare{" "}
+                <code className="neu-inset rounded px-1.5 py-0.5">AI</code> binding (10,000 free
+                Neurons/day included on Cloudflare Workers). Disabled initially so zero inference
+                runs until you toggle it on.
               </p>
             </div>
           </div>
@@ -163,10 +162,8 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
             type="button"
             disabled={saving}
             onClick={() => void handleToggleMaster(!aiEnabled)}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold shadow-xs transition ${
-              aiEnabled
-                ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
+            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+              aiEnabled ? "neu-btn" : "neu-btn-accent"
             }`}
           >
             {aiEnabled ? "Disable AI Agent" : "Enable Cloudflare AI"}
@@ -174,16 +171,19 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
         </div>
 
         {/* Model + Daily Cap Meter */}
-        <div className="mt-5 grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+        <div className="mt-5 grid gap-4 border-t border-[var(--neu-divider)] pt-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="ai-model" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="ai-model"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Workers AI Model
             </label>
             <select
               id="ai-model"
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3 py-2 text-sm"
             >
               {MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -195,10 +195,10 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
 
           <div>
             <div className="flex items-center justify-between text-xs">
-              <label htmlFor="ai-cap" className="font-medium text-slate-700">
+              <label htmlFor="ai-cap" className="font-medium text-[var(--neu-text-secondary)]">
                 Daily Free-Tier Safety Cap (calls/day UTC)
               </label>
-              <span className="font-mono text-slate-500">
+              <span className="font-mono text-[var(--neu-text-muted)]">
                 {settings.aiDailyCount} / {aiDailyCap} used
               </span>
             </div>
@@ -209,14 +209,17 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
               max={2000}
               value={aiDailyCap}
               onChange={(e) => setAiDailyCap(Number.parseInt(e.target.value, 10) || 50)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3 py-2 text-sm"
             />
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="neu-progress-track mt-2.5 h-2 w-full">
               <div
-                className={`h-full transition-all ${
-                  usagePct >= 90 ? "bg-rose-500" : "bg-indigo-600"
-                }`}
-                style={{ width: `${usagePct}%` }}
+                className="neu-progress-fill"
+                style={{
+                  width: `${usagePct}%`,
+                  ...(usagePct >= 90
+                    ? { background: "var(--neu-danger-solid)" }
+                    : {}),
+                }}
               />
             </div>
           </div>
@@ -224,67 +227,79 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
       </div>
 
       {/* Auto-Triage Inbound Mail */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-        <div className="flex items-start justify-between gap-4">
+      <div className="neu-card rounded-2xl p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-start gap-2.5">
-            <Sparkles className="mt-0.5 h-4 w-4 text-indigo-600" />
+            <Sparkles className="mt-0.5 h-4 w-4 text-[var(--neu-coral-text)]" aria-hidden="true" />
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Auto-Triage Inbound Mail</h3>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <h3 className="text-sm font-semibold text-[var(--neu-text)]">
+                Auto-Triage Inbound Mail
+              </h3>
+              <p className="mt-0.5 text-xs text-[var(--neu-text-muted)]">
                 Automatically classify incoming threads by priority (High/Normal/Low) and category
                 (Action Required, Receipt, Newsletter, etc.) in the background.
               </p>
             </div>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 text-xs font-medium text-[var(--neu-text)] select-none">
+            <span>Enabled</span>
             <input
               type="checkbox"
+              role="switch"
+              {...({ switch: "" } as Record<string, string>)}
               checked={autoTriage}
               onChange={(e) => setAutoTriage(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+              className="neu-switch"
             />
-            Enabled
           </label>
         </div>
       </div>
 
       {/* Built-in Function 1: Daily Inbox Summary */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="neu-card rounded-2xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">
-            <CalendarClock className="mt-0.5 h-4 w-4 text-indigo-600" />
+            <CalendarClock
+              className="mt-0.5 h-4 w-4 text-[var(--neu-coral-text)]"
+              aria-hidden="true"
+            />
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">
+              <h3 className="text-sm font-semibold text-[var(--neu-text)]">
                 Built-In Function: Daily Inbox Summary (To-Dos &amp; Reminders)
               </h3>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-[var(--neu-text-muted)]">
                 Generates an executive overview, actionable To-Dos, and upcoming reminders from your
                 inbox on your chosen daily schedule (also callable by MCP/REST agents).
               </p>
             </div>
           </div>
 
-          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 text-xs font-medium text-[var(--neu-text)] select-none">
+            <span>Enabled</span>
             <input
               type="checkbox"
+              role="switch"
+              {...({ switch: "" } as Record<string, string>)}
               checked={dailySummaryEnabled}
               onChange={(e) => setDailySummaryEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+              className="neu-switch"
             />
-            Enabled
           </label>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <div>
-            <label htmlFor="summary-hour" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="summary-hour"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Schedule Hour (Local Time)
             </label>
             <select
               id="summary-hour"
               value={dailySummaryHour}
               onChange={(e) => setDailySummaryHour(Number.parseInt(e.target.value, 10))}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3 py-2 text-sm"
             >
               {Array.from({ length: 24 }, (_, h) => (
                 <option key={h} value={h}>
@@ -295,14 +310,17 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
           </div>
 
           <div>
-            <label htmlFor="summary-tz" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="summary-tz"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Timezone
             </label>
             <select
               id="summary-tz"
               value={dailySummaryTimezone}
               onChange={(e) => setDailySummaryTimezone(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3 py-2 text-sm"
             >
               {TIMEZONES.map((tz) => (
                 <option key={tz} value={tz}>
@@ -313,27 +331,29 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
           </div>
 
           <div className="flex items-end">
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 w-full">
+            <label className="neu-inset flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-xs font-medium text-[var(--neu-text)] select-none">
+              <span>Email copy to default address</span>
               <input
                 type="checkbox"
+                role="switch"
+                {...({ switch: "" } as Record<string, string>)}
                 checked={dailySummaryEmailCopy}
                 onChange={(e) => setDailySummaryEmailCopy(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                className="neu-switch"
               />
-              Email copy to default address
             </label>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-[var(--neu-text-muted)]">
             Last run: {settings.aiDailySummaryLastRunDate || "Never"}
           </span>
           <button
             type="button"
             disabled={!aiEnabled || runningSummary}
             onClick={() => void handleRunSummaryNow()}
-            className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+            className="neu-btn-soft-coral rounded-full px-3.5 py-1.5 text-xs font-semibold"
           >
             {runningSummary ? "Generating..." : "Run Summary Now"}
           </button>
@@ -341,41 +361,46 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
       </div>
 
       {/* Built-in Function 2: Important Email Auto-Reply */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="neu-card rounded-2xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">
-            <MailCheck className="mt-0.5 h-4 w-4 text-indigo-600" />
+            <MailCheck className="mt-0.5 h-4 w-4 text-[var(--neu-coral-text)]" aria-hidden="true" />
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">
+              <h3 className="text-sm font-semibold text-[var(--neu-text)]">
                 Built-In Function: Important Email Auto-Reply
               </h3>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-[var(--neu-text-muted)]">
                 Drafts or sends a contextual response when high-priority human mail arrives.
               </p>
             </div>
           </div>
 
-          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 text-xs font-medium text-[var(--neu-text)] select-none">
+            <span>Enabled</span>
             <input
               type="checkbox"
+              role="switch"
+              {...({ switch: "" } as Record<string, string>)}
               checked={autoReplyEnabled}
               onChange={(e) => setAutoReplyEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+              className="neu-switch"
             />
-            Enabled
           </label>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="autoreply-mode" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="autoreply-mode"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Execution Mode
             </label>
             <select
               id="autoreply-mode"
               value={autoReplyMode}
               onChange={(e) => setAutoReplyMode(e.target.value as AutoReplyMode)}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3 py-2 text-sm"
             >
               <option value="approval">Queue for Approval (Recommended)</option>
               <option value="auto_send">Auto-Send Immediately</option>
@@ -383,7 +408,10 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
           </div>
 
           <div>
-            <label htmlFor="autoreply-cooldown" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="autoreply-cooldown"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Cooldown Per Sender / Thread (hours)
             </label>
             <input
@@ -393,7 +421,7 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
               max={720}
               value={autoReplyCooldown}
               onChange={(e) => setAutoReplyCooldown(Number.parseInt(e.target.value, 10) || 24)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3 py-2 text-sm"
             />
           </div>
         </div>
@@ -401,7 +429,7 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
         <div className="mt-3">
           <label
             htmlFor="autoreply-instructions"
-            className="block text-xs font-medium text-slate-700"
+            className="block text-xs font-medium text-[var(--neu-text-secondary)]"
           >
             Reply Persona &amp; Instructions
           </label>
@@ -410,12 +438,12 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
             rows={3}
             value={autoReplyInstructions}
             onChange={(e) => setAutoReplyInstructions(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+            className="neu-input mt-1.5 w-full rounded-xl p-3 text-sm"
           />
         </div>
 
-        <div className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2.5 text-xs text-emerald-900">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+        <div className="neu-alert-success mt-3.5 flex items-start gap-2 rounded-xl px-3.5 py-2.5 text-xs">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             <strong>RFC 3834 Loop Protection Active:</strong> Automatically skips{" "}
             <code>noreply@</code>, mailing lists (<code>List-Unsubscribe</code>),{" "}
@@ -431,7 +459,7 @@ export function AiAgentTab({ settings, onRefresh, onSuccess, onError }: AiAgentT
           type="button"
           disabled={saving}
           onClick={() => void saveAiSettings()}
-          className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+          className="neu-btn-accent rounded-full px-6 py-2.5 text-xs font-semibold"
         >
           {saving ? "Saving..." : "Save AI Agent Configuration"}
         </button>

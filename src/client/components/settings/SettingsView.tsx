@@ -1,11 +1,13 @@
 /**
  * @file src/client/components/settings/SettingsView.tsx
- * @description Tabbed Settings workspace organizing Address configuration, Built-In Cloudflare
- * Workers AI Agent settings, Scoped Agent Keys, and the Audit Log.
+ * @description Tactile Soft UI tabbed Settings workspace organizing Appearance preference,
+ * Address configuration, Built-In Cloudflare Workers AI Agent settings, Scoped Agent Keys,
+ * and the Audit Log.
  */
 
-import { AtSign, Bot, ClipboardList, KeyRound, Menu } from "lucide-react";
+import { AtSign, Bot, ClipboardList, KeyRound, Menu, Monitor, Moon, Sun } from "lucide-react";
 import type { AddressRecord, AppSettings } from "../../../shared/types";
+import type { ResolvedTheme, ThemePreference } from "../../lib/theme";
 import { AddressesTab } from "./AddressesTab";
 import { AgentKeysTab } from "./AgentKeysTab";
 import { AiAgentTab } from "./AiAgentTab";
@@ -17,6 +19,9 @@ interface SettingsViewProps {
   activeTab: SettingsTabId;
   settings: AppSettings;
   addresses: AddressRecord[];
+  themePreference: ThemePreference;
+  systemTheme: ResolvedTheme;
+  onSelectThemePreference: (pref: ThemePreference) => void;
   onTabChange: (tab: SettingsTabId) => void;
   onRefreshMeta: () => Promise<void>;
   onOpenMobileNav: () => void;
@@ -35,6 +40,9 @@ export function SettingsView({
   activeTab,
   settings,
   addresses,
+  themePreference,
+  systemTheme,
+  onSelectThemePreference,
   onTabChange,
   onRefreshMeta,
   onOpenMobileNav,
@@ -42,44 +50,91 @@ export function SettingsView({
   onError,
 }: SettingsViewProps) {
   return (
-    <div className="flex h-full flex-1 flex-col overflow-hidden bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-5 pt-4">
-        <div className="flex items-center gap-2.5 pb-3">
-          <button
-            type="button"
-            onClick={onOpenMobileNav}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
-            aria-label="Open menu"
+    <div className="neu-canvas flex h-full flex-1 flex-col overflow-hidden">
+      <header className="neu-panel border-b border-[var(--neu-divider)] px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onOpenMobileNav}
+              className="neu-icon-btn h-8 w-8 lg:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <div>
+              <h1 className="text-lg font-semibold text-[var(--neu-text)]">Settings</h1>
+              <p className="text-xs text-[var(--neu-text-muted)]">
+                Manage appearance, custom addresses, Cloudflare AI automation, and external agent
+                permissions.
+              </p>
+            </div>
+          </div>
+
+          {/* 3-State Appearance Switcher (System / Light / Dark) per modern-web-guidance */}
+          <div
+            className="neu-segmented flex-wrap text-xs"
+            role="group"
+            aria-label="Color theme preference"
           >
-            <Menu className="h-4 w-4" />
-          </button>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Settings</h1>
-            <p className="text-xs text-slate-500">
-              Manage custom addresses, Cloudflare AI automation, and external agent permissions.
-            </p>
+            <button
+              type="button"
+              data-active={themePreference === "system"}
+              aria-pressed={themePreference === "system"}
+              onClick={() => onSelectThemePreference("system")}
+              className="neu-segmented-btn px-3 py-1.5 font-medium"
+            >
+              <Monitor className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>System ({systemTheme === "dark" ? "Dark" : "Light"})</span>
+            </button>
+            <button
+              type="button"
+              data-active={themePreference === "light"}
+              aria-pressed={themePreference === "light"}
+              onClick={() => onSelectThemePreference("light")}
+              className="neu-segmented-btn px-3 py-1.5 font-medium"
+            >
+              <Sun className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Light</span>
+            </button>
+            <button
+              type="button"
+              data-active={themePreference === "dark"}
+              aria-pressed={themePreference === "dark"}
+              onClick={() => onSelectThemePreference("dark")}
+              className="neu-segmented-btn px-3 py-1.5 font-medium"
+            >
+              <Moon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Dark</span>
+            </button>
           </div>
         </div>
 
-        <nav className="flex gap-1 overflow-x-auto" aria-label="Settings tabs">
-          {TABS.map(({ id, label, icon: Icon }) => {
-            const active = activeTab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onTabChange(id)}
-                className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-xs font-medium transition ${
-                  active
-                    ? "border-indigo-600 text-indigo-700"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
+        {/* Sculpted Segmented Tab Bar matching reference hardware pill strip */}
+        <nav className="overflow-x-auto pb-0.5" aria-label="Settings tabs">
+          <div className="neu-segmented text-xs">
+            {TABS.map(({ id, label, icon: Icon }) => {
+              const active = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-active={active}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => onTabChange(id)}
+                  className="neu-segmented-btn shrink-0 px-3.5 py-1.5 font-medium"
+                >
+                  <Icon
+                    className={`h-3.5 w-3.5 ${
+                      active ? "text-[var(--neu-coral-text)]" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
       </header>
 

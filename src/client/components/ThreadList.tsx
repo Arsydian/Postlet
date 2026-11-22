@@ -1,7 +1,7 @@
 /**
  * @file src/client/components/ThreadList.tsx
- * @description Searchable thread list pane with AI triage filter chips, unread indicators,
- * delivery status badges, and pagination.
+ * @description Tactile Soft UI searchable thread list pane with debossed pill search well,
+ * extruded triage filter chips, coral unread indicators, delivery badges, and pagination.
  */
 
 import { Menu, RefreshCw, Search } from "lucide-react";
@@ -46,7 +46,7 @@ function formatShortDate(iso: string): string {
 function StatusBadge({ status, hasPending }: { status: MessageStatus | null; hasPending: boolean }) {
   if (hasPending || status === "pending_approval") {
     return (
-      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+      <span className="neu-badge-warning rounded-full px-2 py-0.5 text-[10px] font-semibold">
         Needs Approval
       </span>
     );
@@ -54,13 +54,13 @@ function StatusBadge({ status, hasPending }: { status: MessageStatus | null; has
   if (!status || status === "received") return null;
 
   const styles: Record<string, string> = {
-    delivered: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    sent: "bg-sky-50 text-sky-700 border border-sky-200",
-    delayed: "bg-amber-50 text-amber-700 border border-amber-200",
-    bounced: "bg-rose-50 text-rose-700 border border-rose-200",
-    complained: "bg-rose-50 text-rose-700 border border-rose-200",
-    failed: "bg-rose-50 text-rose-700 border border-rose-200",
-    draft: "bg-slate-100 text-slate-600",
+    delivered: "neu-badge-success",
+    sent: "neu-badge-info",
+    delayed: "neu-badge-warning",
+    bounced: "neu-badge-danger",
+    complained: "neu-badge-danger",
+    failed: "neu-badge-danger",
+    draft: "neu-badge",
   };
   const cls = styles[status];
   if (!cls) return null;
@@ -89,34 +89,36 @@ export function ThreadList({
 }: ThreadListProps) {
   return (
     <section
-      className="flex h-full w-full flex-col border-r border-slate-200 bg-white md:w-88 lg:w-96 shrink-0"
+      className="neu-panel flex h-full w-full shrink-0 flex-col border-r border-[var(--neu-divider)] md:w-88 lg:w-96"
       aria-label="Conversation threads"
     >
-      {/* Header + Search */}
-      <div className="border-b border-slate-200 px-3.5 py-3">
-        <div className="mb-2.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+      {/* Header + Debossed Search Well */}
+      <div className="border-b border-[var(--neu-divider)] px-4 py-3.5">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={onOpenMobileNav}
-              className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
+              className="neu-icon-btn h-8 w-8 lg:hidden"
               aria-label="Open menu"
             >
               <Menu className="h-4 w-4" />
             </button>
             <div>
-              <h1 className="text-base font-semibold text-slate-900">
+              <h1 className="text-base font-semibold text-[var(--neu-text)]">
                 {FOLDER_TITLES[folder]}
               </h1>
               {selectedAddress && (
-                <p className="text-[11px] font-medium text-indigo-600">{selectedAddress}</p>
+                <p className="text-[11px] font-semibold text-[var(--neu-coral-text)]">
+                  {selectedAddress}
+                </p>
               )}
             </div>
           </div>
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+            className="neu-icon-btn h-8 w-8"
             title="Refresh"
             aria-label="Refresh threads"
           >
@@ -124,18 +126,25 @@ export function ThreadList({
           </button>
         </div>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search mail (subject, sender, body)..."
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
-          />
+        {/* Sculpted outer bezel + debossed search well matching reference hardware styling */}
+        <div className="neu-search-bezel">
+          <div className="neu-search-well">
+            <Search
+              className="pointer-events-none ml-3 h-4 w-4 shrink-0 text-[var(--neu-text-muted)]"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search mail (subject, sender, body)..."
+              aria-label="Search mail"
+              className="w-full bg-transparent py-1.5 pl-2.5 pr-3.5 text-sm text-[var(--neu-text)] focus:outline-none"
+            />
+          </div>
         </div>
 
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {(
             [
               { id: "all", label: "All" },
@@ -143,29 +152,31 @@ export function ThreadList({
               { id: "high", label: "High Priority" },
               { id: "action_required", label: "Action Required" },
             ] as const
-          ).map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              onClick={() => onFilterChipChange(chip.id)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                filterChip === chip.id
-                  ? "bg-slate-900 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {chip.label}
-            </button>
-          ))}
+          ).map((chip) => {
+            const active = filterChip === chip.id;
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onFilterChipChange(chip.id)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  active ? "neu-btn-accent" : "neu-btn text-[var(--neu-text-secondary)]"
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Thread rows */}
-      <div className="flex-1 divide-y divide-slate-100 overflow-y-auto">
+      {/* Tactile Thread Cards */}
+      <div className="flex-1 space-y-2.5 overflow-y-auto p-3">
         {threads.length === 0 && !loading ? (
-          <div className="flex h-56 flex-col items-center justify-center px-6 text-center">
-            <p className="text-sm font-medium text-slate-700">No conversations here</p>
-            <p className="mt-1 text-xs text-slate-500">
+          <div className="neu-card flex h-56 flex-col items-center justify-center rounded-2xl px-6 text-center">
+            <p className="text-sm font-semibold text-[var(--neu-text)]">No conversations here</p>
+            <p className="mt-1 text-xs text-[var(--neu-text-muted)]">
               {searchQuery
                 ? "Try adjusting your search keywords or filters."
                 : "Incoming Resend emails and sent messages will appear here."}
@@ -184,65 +195,67 @@ export function ThreadList({
               <button
                 key={thread.id}
                 type="button"
+                data-selected={isSelected}
+                aria-current={isSelected ? "true" : undefined}
                 onClick={() => onSelectThread(thread.id)}
-                className={`block w-full px-4 py-3 text-left transition ${
-                  isSelected
-                    ? "bg-indigo-50/80"
-                    : isUnread
-                      ? "bg-white hover:bg-slate-50"
-                      : "bg-slate-50/30 hover:bg-slate-50"
-                }`}
+                className="neu-thread-card block w-full rounded-2xl p-3.5 text-left"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     {isUnread && (
                       <span
-                        className="h-2 w-2 shrink-0 rounded-full bg-indigo-600"
+                        className="neu-coral-dot h-2.5 w-2.5 shrink-0 rounded-full"
                         title="Unread"
                       />
                     )}
                     <span
                       className={`truncate text-sm ${
-                        isUnread ? "font-semibold text-slate-900" : "font-medium text-slate-700"
+                        isUnread
+                          ? "font-semibold text-[var(--neu-text)]"
+                          : "font-medium text-[var(--neu-text-secondary)]"
                       }`}
                     >
                       {displayParticipants}
                     </span>
                   </div>
-                  <span className="shrink-0 text-[11px] text-slate-400">
+                  <span className="shrink-0 text-[11px] text-[var(--neu-text-muted)]">
                     {formatShortDate(thread.lastMessageAt)}
                   </span>
                 </div>
 
-                <div className="mt-0.5 flex items-center justify-between gap-2">
+                <div className="mt-1 flex items-center justify-between gap-2">
                   <p
                     className={`truncate text-sm ${
-                      isUnread ? "font-semibold text-slate-900" : "font-normal text-slate-800"
+                      isUnread
+                        ? "font-semibold text-[var(--neu-text)]"
+                        : "font-normal text-[var(--neu-text)]"
                     }`}
                   >
                     {thread.subject}
                   </p>
                   {thread.messageCount > 1 && (
-                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    <span className="neu-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
                       {thread.messageCount}
                     </span>
                   )}
                 </div>
 
-                <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{thread.snippet}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-[var(--neu-text-secondary)]">
+                  {thread.snippet}
+                </p>
 
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <StatusBadge
                     status={thread.latestStatus}
                     hasPending={thread.hasPendingApproval}
                   />
                   {thread.aiPriority === "high" && (
-                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    <span className="neu-badge-danger rounded-full px-2 py-0.5 text-[10px] font-semibold">
                       High Priority
                     </span>
                   )}
                   {thread.aiCategory && (
-                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                    <span className="neu-badge-coral rounded-full px-2 py-0.5 text-[10px] font-medium">
                       {thread.aiCategory.replace("_", " ")}
                     </span>
                   )}
@@ -253,12 +266,12 @@ export function ThreadList({
         )}
 
         {hasMore && (
-          <div className="p-3 text-center">
+          <div className="pt-1 pb-2 text-center">
             <button
               type="button"
               onClick={onLoadMore}
               disabled={loading}
-              className="rounded-lg border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="neu-btn rounded-full px-4 py-1.5 text-xs font-medium text-[var(--neu-text)]"
             >
               {loading ? "Loading..." : "Load more threads"}
             </button>

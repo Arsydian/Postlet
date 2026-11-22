@@ -1,10 +1,10 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.3.0-indigo)
+# Postlet ![Version](https://img.shields.io/badge/version-0.4.0-E05337)
 
 Self-hosted, single-owner email client and AI-agent mail gateway running on **Cloudflare Workers** and **Resend** — designed to deploy directly from a synced GitHub repository and run comfortably inside Cloudflare's Free Tier.
 
 ## Features
 
-- **Full-Featured Web Inbox** (`/`): Clean, responsive 3-pane UI with folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Rich Text (Bold, Italic, Underline, Strikethrough, Code, Headings, Lists, Blockquotes, Links), Markdown, and Plain Text composer, saved draft editing/discarding, Reply / Reply All / Forward, optional Resend open & link tracking checkbox, and live delivery + engagement status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`, `email.opened`, `email.clicked`).
+- **Full-Featured Web Inbox** (`/`): Tactile Soft UI responsive 3-pane interface with automatic OS color-scheme detection + persistent Light / Dark / System theme toggle, folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Rich Text (Bold, Italic, Underline, Strikethrough, Code, Headings, Lists, Blockquotes, Links), Markdown, and Plain Text composer, saved draft editing/discarding, Reply / Reply All / Forward, optional Resend open & link tracking switch, and live delivery + engagement status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`, `email.opened`, `email.clicked`).
 - **Catch-All & Address Manager**: Accept mail for `*@yourdomain.com` via Resend inbound webhooks, configure sender aliases in **Settings → Addresses & Domain**, and filter inbox threads per address.
 - **Cloudflare Zero Trust Access Authentication**: Protects the Web UI and `/api/admin/*` with cryptographic RS256 JWKS verification of `Cf-Access-Jwt-Assertion` tokens.
 - **Built-In Cloudflare Workers AI Agent (`postlet-ai`)** *(Disabled by default)*: Uses your native Cloudflare `AI` binding (10,000 free Neurons/day). Toggle on in **Settings → AI Agent** to unlock:

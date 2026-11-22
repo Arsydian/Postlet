@@ -1,8 +1,8 @@
 /**
  * @file src/client/components/settings/AgentKeysTab.tsx
- * @description Settings tab to mint and revoke scoped AI agent API keys (`read_only`,
- * `read_draft`, `read_write`) with alias locks, domain allowlists, built-in AI function
- * toggles, and one-click MCP / curl / OpenAPI onboarding snippets.
+ * @description Tactile Soft UI settings tab to mint and revoke scoped AI agent API keys
+ * (`read_only`, `read_draft`, `read_write`) with alias locks, domain allowlists, built-in AI
+ * function toggles, and one-click MCP / curl / OpenAPI onboarding snippets.
  */
 
 import { Check, Copy, KeyRound, Plus, ShieldOff } from "lucide-react";
@@ -118,22 +118,22 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
   return (
     <div className="space-y-6">
       {/* Create Form */}
-      <form
-        onSubmit={(e) => void handleCreate(e)}
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"
-      >
-        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <KeyRound className="h-4 w-4 text-indigo-600" />
+      <form onSubmit={(e) => void handleCreate(e)} className="neu-card rounded-2xl p-5">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--neu-text)]">
+          <KeyRound className="h-4 w-4 text-[var(--neu-coral-text)]" aria-hidden="true" />
           Create Scoped AI Agent API Key
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-[var(--neu-text-muted)]">
           Keys work seamlessly with both Postlet&apos;s native MCP endpoint (<code>/mcp</code>) and
           REST API (<code>/api/v1/*</code>). Keys are stored strictly as SHA-256 hashes.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="key-name" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="key-name"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Agent Name
             </label>
             <input
@@ -143,19 +143,22 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Claude Triage Agent"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3.5 py-2 text-sm"
             />
           </div>
 
           <div>
-            <label htmlFor="key-scope" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="key-scope"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Permission Scope
             </label>
             <select
               id="key-scope"
               value={scope}
               onChange={(e) => setScope(e.target.value as AgentScope)}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3.5 py-2 text-sm"
             >
               <option value="read_only">Read Only (read threads, search, read digests)</option>
               <option value="read_draft">Read &amp; Draft (queues drafts in Pending Approval)</option>
@@ -164,14 +167,17 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
           </div>
 
           <div>
-            <label htmlFor="key-alias" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="key-alias"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Restrict to Configured Address (Optional)
             </label>
             <select
               id="key-alias"
               value={allowedAddressId}
               onChange={(e) => setAllowedAddressId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3.5 py-2 text-sm"
             >
               <option value="">All mailbox addresses</option>
               {addresses.map((a) => (
@@ -183,7 +189,10 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
           </div>
 
           <div>
-            <label htmlFor="key-domains" className="block text-xs font-medium text-slate-700">
+            <label
+              htmlFor="key-domains"
+              className="block text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Allowed Recipient Domains (Optional, comma separated)
             </label>
             <input
@@ -192,21 +201,26 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
               value={allowedDomainsRaw}
               onChange={(e) => setAllowedDomainsRaw(e.target.value)}
               placeholder="e.g., acme.com, example.org"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input mt-1.5 w-full rounded-xl px-3.5 py-2 text-sm"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--neu-divider)] pt-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-medium text-slate-700">Built-In Functions:</span>
+            <span className="text-xs font-medium text-[var(--neu-text-secondary)]">
+              Built-In Functions:
+            </span>
             {ALL_FUNCTIONS.map((fn) => (
-              <label key={fn.id} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+              <label
+                key={fn.id}
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-xs text-[var(--neu-text-secondary)] select-none"
+              >
                 <input
                   type="checkbox"
                   checked={allowedFunctions.includes(fn.id)}
                   onChange={() => toggleFn(fn.id)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600"
+                  className="neu-checkbox"
                 />
                 {fn.label}
               </label>
@@ -214,7 +228,7 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <label className="flex items-center gap-2 text-xs text-[var(--neu-text-secondary)]">
               Rate/hr:
               <input
                 type="number"
@@ -222,15 +236,15 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
                 max={5000}
                 value={rateLimit}
                 onChange={(e) => setRateLimit(Number.parseInt(e.target.value, 10) || 60)}
-                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                className="neu-input w-20 rounded-xl px-2.5 py-1.5 text-xs"
               />
             </label>
             <button
               type="submit"
               disabled={creating}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="neu-btn-accent inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-xs font-semibold"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               {creating ? "Generating..." : "Create Key"}
             </button>
           </div>
@@ -239,60 +253,64 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
 
       {/* One-time Secret Reveal & Snippets */}
       {revealed && (
-        <div className="rounded-2xl border border-emerald-300 bg-emerald-50/70 p-5 shadow-xs">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-emerald-950">
+        <div className="neu-alert-success rounded-2xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">
               Key Created — Copy Secret Now (Shown Once)
             </h3>
             <button
               type="button"
               onClick={() => copyText("secret", revealed.secret)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-800"
+              className="neu-btn-success inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold"
             >
-              {copiedId === "secret" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiedId === "secret" ? (
+                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
               {copiedId === "secret" ? "Copied Key" : "Copy Key"}
             </button>
           </div>
-          <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs text-emerald-300">
+          <pre className="neu-code-block mt-2.5 overflow-x-auto rounded-xl p-3 font-mono text-xs text-emerald-300">
             {revealed.secret}
           </pre>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <div>
-              <div className="mb-1 flex items-center justify-between text-xs font-medium text-emerald-900">
+              <div className="mb-1.5 flex items-center justify-between text-xs font-medium">
                 <span>MCP Client Config (/mcp)</span>
                 <button
                   type="button"
                   onClick={() => copyText("mcp", revealed.snippets.mcpConfigJson)}
-                  className="text-emerald-700 hover:underline"
+                  className="font-semibold hover:underline"
                 >
                   {copiedId === "mcp" ? "Copied!" : "Copy JSON"}
                 </button>
               </div>
-              <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] text-slate-100">
+              <pre className="neu-code-block overflow-x-auto rounded-xl p-3 font-mono text-[11px]">
                 {revealed.snippets.mcpConfigJson}
               </pre>
             </div>
 
             <div className="space-y-3">
               <div>
-                <div className="mb-1 flex items-center justify-between text-xs font-medium text-emerald-900">
+                <div className="mb-1.5 flex items-center justify-between text-xs font-medium">
                   <span>REST API cURL Example</span>
                   <button
                     type="button"
                     onClick={() => copyText("curl", revealed.snippets.curlCommand)}
-                    className="text-emerald-700 hover:underline"
+                    className="font-semibold hover:underline"
                   >
                     {copiedId === "curl" ? "Copied!" : "Copy cURL"}
                   </button>
                 </div>
-                <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] text-slate-100">
+                <pre className="neu-code-block overflow-x-auto rounded-xl p-3 font-mono text-[11px]">
                   {revealed.snippets.curlCommand}
                 </pre>
               </div>
-              <div className="text-xs text-emerald-900">
+              <div className="text-xs">
                 OpenAPI 3.1 Schema:{" "}
-                <code className="rounded bg-white px-1.5 py-0.5 text-[11px]">
+                <code className="neu-inset rounded px-2 py-0.5 text-[11px] text-[var(--neu-text)]">
                   {revealed.snippets.openApiUrl}
                 </code>
               </div>
@@ -302,11 +320,13 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
       )}
 
       {/* Existing Keys */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-        <h3 className="text-sm font-semibold text-slate-900">Issued Agent Keys ({keys.length})</h3>
-        <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+      <div className="neu-card rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-[var(--neu-text)]">
+          Issued Agent Keys ({keys.length})
+        </h3>
+        <div className="neu-inset mt-3 divide-y divide-[var(--neu-divider)] rounded-2xl">
           {keys.length === 0 ? (
-            <p className="p-4 text-center text-xs text-slate-500">
+            <p className="p-4 text-center text-xs text-[var(--neu-text-muted)]">
               No agent API keys created yet.
             </p>
           ) : (
@@ -317,28 +337,28 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
               >
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">{k.name}</span>
-                    <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
+                    <span className="text-sm font-medium text-[var(--neu-text)]">{k.name}</span>
+                    <code className="neu-badge rounded-full px-2 py-0.5 text-[11px]">
                       {k.keyPrefix}…
                     </code>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                         k.scope === "read_only"
-                          ? "bg-sky-50 text-sky-700"
+                          ? "neu-badge-info"
                           : k.scope === "read_draft"
-                            ? "bg-amber-50 text-amber-800"
-                            : "bg-rose-50 text-rose-700"
+                            ? "neu-badge-warning"
+                            : "neu-badge-danger"
                       }`}
                     >
                       {k.scope}
                     </span>
                     {k.revokedAt && (
-                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                      <span className="neu-badge rounded-full px-2 py-0.5 text-[10px] font-semibold">
                         Revoked
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-[var(--neu-text-muted)]">
                     Address: {k.allowedAddressEmail || "All"} · Rate: {k.rateLimitPerHour}/hr
                     {k.allowedRecipientDomains
                       ? ` · Domains: ${k.allowedRecipientDomains.join(", ")}`
@@ -353,9 +373,9 @@ export function AgentKeysTab({ addresses, onSuccess, onError }: AgentKeysTabProp
                   <button
                     type="button"
                     onClick={() => void handleRevoke(k.id)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                    className="neu-btn-danger inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
                   >
-                    <ShieldOff className="h-3.5 w-3.5" />
+                    <ShieldOff className="h-3.5 w-3.5" aria-hidden="true" />
                     Revoke
                   </button>
                 )}

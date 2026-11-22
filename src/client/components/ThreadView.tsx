@@ -1,7 +1,7 @@
 /**
  * @file src/client/components/ThreadView.tsx
- * @description Full conversation thread reader with sandboxed sanitized HTML rendering,
- * R2 attachment downloads, delivery status timeline, Workers AI summary card, and Reply/Forward.
+ * @description Tactile Soft UI conversation thread reader with theme-aware sandboxed sanitized HTML
+ * rendering, R2 attachment downloads, delivery status timeline, Workers AI brief card, and Reply/Forward.
  */
 
 import {
@@ -17,16 +17,19 @@ import {
   ReplyAll,
   Send,
   Sparkles,
+  Sun,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AppSettings, MessageRecord, ThreadDetail } from "../../shared/types";
 import { buildEmailIframeSrcDoc, hasRemoteImages, sanitizeEmailHtml } from "../lib/sanitize";
+import type { ResolvedTheme } from "../lib/theme";
 import { ApprovalBanner } from "./ApprovalBanner";
 
 interface ThreadViewProps {
   thread: ThreadDetail | null;
   settings: AppSettings;
+  resolvedTheme: ResolvedTheme;
   aiBusy: boolean;
   actionBusy: boolean;
   onBackMobile: () => void;
@@ -52,15 +55,26 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SanitizedEmailFrame({ htmlBody, textBody }: { htmlBody: string; textBody: string }) {
+function SanitizedEmailFrame({
+  htmlBody,
+  textBody,
+  resolvedTheme,
+}: {
+  htmlBody: string;
+  textBody: string;
+  resolvedTheme: ResolvedTheme;
+}) {
   const [srcDoc, setSrcDoc] = useState<string>("");
   const [viewMode, setViewMode] = useState<"html" | "text">(htmlBody ? "html" : "text");
   const [allowRemoteImages, setAllowRemoteImages] = useState(false);
+  const [forceLightPaper, setForceLightPaper] = useState(false);
 
   const remoteImagesPresent = Boolean(htmlBody && hasRemoteImages(htmlBody));
+  const iframeTheme: ResolvedTheme = forceLightPaper ? "light" : resolvedTheme;
 
   useEffect(() => {
     setAllowRemoteImages(false);
+    setForceLightPaper(false);
     setViewMode(htmlBody ? "html" : "text");
   }, [htmlBody]);
 
@@ -72,58 +86,72 @@ function SanitizedEmailFrame({ htmlBody, textBody }: { htmlBody: string; textBod
     }
     void sanitizeEmailHtml(htmlBody).then((sanitized) => {
       if (!cancelled) {
-        setSrcDoc(buildEmailIframeSrcDoc(sanitized, { allowRemoteImages }));
+        setSrcDoc(buildEmailIframeSrcDoc(sanitized, { allowRemoteImages, theme: iframeTheme }));
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [htmlBody, allowRemoteImages]);
+  }, [htmlBody, allowRemoteImages, iframeTheme]);
 
   if (!htmlBody && !textBody) {
-    return <p className="text-sm italic text-slate-400">(Empty message body)</p>;
+    return <p className="text-sm italic text-[var(--neu-text-muted)]">(Empty message body)</p>;
   }
 
   return (
     <div>
-      {(remoteImagesPresent || (htmlBody && textBody)) && (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div>
+      {(remoteImagesPresent || (htmlBody && textBody) || (resolvedTheme === "dark" && htmlBody)) && (
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {remoteImagesPresent && viewMode === "html" && !allowRemoteImages && (
-              <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+              <div className="neu-inset inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] text-[var(--neu-text-secondary)]">
                 <span>Remote images blocked</span>
                 <button
                   type="button"
                   onClick={() => setAllowRemoteImages(true)}
-                  className="font-semibold text-indigo-600 hover:underline"
+                  className="font-semibold text-[var(--neu-coral-text)] hover:underline"
                 >
                   Load images
                 </button>
               </div>
             )}
           </div>
-          {htmlBody && textBody && (
-            <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
+
+          <div className="flex flex-wrap items-center gap-2">
+            {resolvedTheme === "dark" && viewMode === "html" && Boolean(htmlBody) && (
               <button
                 type="button"
-                onClick={() => setViewMode("html")}
-                className={`rounded px-2 py-0.5 font-medium ${
-                  viewMode === "html" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500"
-                }`}
+                aria-pressed={forceLightPaper}
+                onClick={() => setForceLightPaper((v) => !v)}
+                className="neu-btn inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--neu-text-secondary)]"
+                title="Switch email canvas between dark and light paper for bright third-party emails"
               >
-                HTML
+                <Sun className="h-3 w-3" aria-hidden="true" />
+                {forceLightPaper ? "Dark Canvas" : "Light Paper"}
               </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("text")}
-                className={`rounded px-2 py-0.5 font-medium ${
-                  viewMode === "text" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500"
-                }`}
-              >
-                Plain Text
-              </button>
-            </div>
-          )}
+            )}
+
+            {htmlBody && textBody && (
+              <div className="neu-segmented text-[11px]">
+                <button
+                  type="button"
+                  data-active={viewMode === "html"}
+                  onClick={() => setViewMode("html")}
+                  className="neu-segmented-btn px-2.5 py-0.5 font-medium"
+                >
+                  HTML
+                </button>
+                <button
+                  type="button"
+                  data-active={viewMode === "text"}
+                  onClick={() => setViewMode("text")}
+                  className="neu-segmented-btn px-2.5 py-0.5 font-medium"
+                >
+                  Plain Text
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -133,10 +161,10 @@ function SanitizedEmailFrame({ htmlBody, textBody }: { htmlBody: string; textBod
           sandbox="allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
           srcDoc={srcDoc}
-          className="h-[380px] min-h-[180px] max-h-[1200px] w-full resize-y rounded-lg border border-slate-100 bg-white"
+          className="h-[380px] min-h-[180px] max-h-[1200px] w-full resize-y rounded-xl border border-[var(--neu-border)] bg-[var(--neu-inset)]"
         />
       ) : (
-        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-800">
+        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--neu-text)]">
           {textBody}
         </pre>
       )}
@@ -147,6 +175,7 @@ function SanitizedEmailFrame({ htmlBody, textBody }: { htmlBody: string; textBod
 export function ThreadView({
   thread,
   settings,
+  resolvedTheme,
   aiBusy,
   actionBusy,
   onBackMobile,
@@ -167,15 +196,19 @@ export function ThreadView({
 }: ThreadViewProps) {
   if (!thread) {
     return (
-      <div className="hidden flex-1 flex-col items-center justify-center bg-slate-50/70 p-8 text-center md:flex">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-          <Inbox className="h-6 w-6" />
+      <div className="neu-canvas hidden flex-1 flex-col items-center justify-center p-8 text-center md:flex">
+        <div className="neu-card max-w-sm rounded-3xl p-8">
+          <div className="neu-inset mx-auto flex h-14 w-14 items-center justify-center rounded-full text-[var(--neu-coral-text)]">
+            <Inbox className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <h2 className="mt-4 text-base font-semibold text-[var(--neu-text)]">
+            Select a conversation
+          </h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-[var(--neu-text-muted)]">
+            Pick an email thread on the left to inspect rich HTML content, attachments, delivery
+            status, or pending AI agent drafts.
+          </p>
         </div>
-        <h2 className="mt-3 text-base font-semibold text-slate-900">Select a conversation</h2>
-        <p className="mt-1 max-w-sm text-xs text-slate-500">
-          Pick an email thread on the left to inspect rich HTML content, attachments, delivery status,
-          or pending AI agent drafts.
-        </p>
       </div>
     );
   }
@@ -187,36 +220,41 @@ export function ThreadView({
     );
 
   return (
-    <div className="flex h-full flex-1 flex-col overflow-hidden bg-slate-50/50">
+    <div className="neu-canvas flex h-full flex-1 flex-col overflow-hidden">
       {/* Sticky Toolbar */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
+      <header className="neu-panel flex flex-wrap items-center justify-between gap-2 border-b border-[var(--neu-divider)] px-4 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
             onClick={onBackMobile}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 md:hidden"
+            className="neu-icon-btn h-8 w-8 md:hidden"
             aria-label="Back to thread list"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-slate-900">{thread.subject}</h2>
-            <p className="truncate text-xs text-slate-500">
-              Recipient: <span className="font-medium text-slate-700">{thread.recipientAddress}</span> ·{" "}
-              {thread.messages.length} {thread.messages.length === 1 ? "message" : "messages"}
+            <h2 className="truncate text-base font-semibold text-[var(--neu-text)]">
+              {thread.subject}
+            </h2>
+            <p className="truncate text-xs text-[var(--neu-text-muted)]">
+              Recipient:{" "}
+              <span className="font-medium text-[var(--neu-text-secondary)]">
+                {thread.recipientAddress}
+              </span>{" "}
+              · {thread.messages.length} {thread.messages.length === 1 ? "message" : "messages"}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           {thread.folder !== "archive" && (
             <button
               type="button"
               disabled={actionBusy}
               onClick={() => onMoveFolder(thread.id, "archive")}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="neu-btn inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
             >
-              <Archive className="h-3.5 w-3.5" />
+              <Archive className="h-3.5 w-3.5" aria-hidden="true" />
               Archive
             </button>
           )}
@@ -225,9 +263,9 @@ export function ThreadView({
               type="button"
               disabled={actionBusy}
               onClick={() => onMoveFolder(thread.id, "inbox")}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="neu-btn inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
             >
-              <Inbox className="h-3.5 w-3.5" />
+              <Inbox className="h-3.5 w-3.5" aria-hidden="true" />
               Move to Inbox
             </button>
           )}
@@ -235,9 +273,9 @@ export function ThreadView({
             type="button"
             disabled={actionBusy}
             onClick={() => onToggleUnread(thread.id, thread.unreadCount > 0)}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="neu-btn inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
           >
-            <MailOpen className="h-3.5 w-3.5" />
+            <MailOpen className="h-3.5 w-3.5" aria-hidden="true" />
             {thread.unreadCount > 0 ? "Mark Read" : "Mark Unread"}
           </button>
           {thread.folder !== "trash" ? (
@@ -245,9 +283,9 @@ export function ThreadView({
               type="button"
               disabled={actionBusy}
               onClick={() => onMoveFolder(thread.id, "trash")}
-              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+              className="neu-btn-danger inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               Trash
             </button>
           ) : (
@@ -255,9 +293,9 @@ export function ThreadView({
               type="button"
               disabled={actionBusy}
               onClick={() => onDeletePermanent(thread.id)}
-              className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
+              className="neu-btn-danger-solid inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               Delete Forever
             </button>
           )}
@@ -267,26 +305,24 @@ export function ThreadView({
       {/* Scrollable Body */}
       <div className="flex-1 space-y-4 overflow-y-auto p-4 lg:p-6">
         {/* Built-in Cloudflare Workers AI Summary Card */}
-        <div className="rounded-xl border border-indigo-100 bg-white p-4 shadow-xs">
+        <div className="neu-card rounded-2xl p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-indigo-600" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-indigo-900">
+              <Sparkles className="h-4 w-4 text-[var(--neu-coral-text)]" aria-hidden="true" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--neu-text)]">
                 Cloudflare AI Thread Brief
               </span>
               {thread.aiPriority && (
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                    thread.aiPriority === "high"
-                      ? "bg-rose-100 text-rose-700"
-                      : "bg-slate-100 text-slate-600"
+                    thread.aiPriority === "high" ? "neu-badge-danger" : "neu-badge"
                   }`}
                 >
                   {thread.aiPriority}
                 </span>
               )}
               {thread.aiCategory && (
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                <span className="neu-badge-coral rounded-full px-2 py-0.5 text-[10px] font-medium">
                   {thread.aiCategory.replace("_", " ")}
                 </span>
               )}
@@ -298,16 +334,20 @@ export function ThreadView({
                   type="button"
                   disabled={aiBusy}
                   onClick={() => onSummarize(thread.id)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                  className="neu-btn-soft-coral inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
                 >
-                  <Bot className="h-3.5 w-3.5" />
-                  {aiBusy ? "Thinking..." : thread.aiSummary ? "Refresh Summary" : "Summarize & Triage"}
+                  <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+                  {aiBusy
+                    ? "Thinking..."
+                    : thread.aiSummary
+                      ? "Refresh Summary"
+                      : "Summarize & Triage"}
                 </button>
                 <button
                   type="button"
                   disabled={aiBusy}
                   onClick={() => onAutoReplyDraft(thread.id)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="neu-btn inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium"
                 >
                   Draft AI Reply
                 </button>
@@ -316,7 +356,7 @@ export function ThreadView({
               <button
                 type="button"
                 onClick={onOpenAiSettings}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                className="text-xs font-semibold text-[var(--neu-coral-text)] hover:underline"
               >
                 Enable Cloudflare AI in Settings →
               </button>
@@ -324,9 +364,11 @@ export function ThreadView({
           </div>
 
           {thread.aiSummary ? (
-            <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{thread.aiSummary}</p>
+            <p className="mt-2.5 whitespace-pre-line text-sm leading-relaxed text-[var(--neu-text-secondary)]">
+              {thread.aiSummary}
+            </p>
           ) : (
-            <p className="mt-1.5 text-xs text-slate-500">
+            <p className="mt-1.5 text-xs text-[var(--neu-text-muted)]">
               {settings.aiEnabled
                 ? "Click Summarize & Triage to generate a cached Workers AI summary for this thread."
                 : "Cloudflare Workers AI is currently disabled (default). Toggle it on in Settings when ready."}
@@ -356,99 +398,99 @@ export function ThreadView({
           return (
             <article
               key={msg.id}
-              className={`rounded-xl border bg-white p-4 shadow-xs ${
-                isDraft ? "border-indigo-200 ring-1 ring-indigo-100" : "border-slate-200"
+              className={`neu-card rounded-2xl p-5 ${
+                isDraft ? "border-[var(--neu-coral-soft-border)]" : ""
               }`}
             >
               {isDraft && (
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2">
+                <div className="neu-alert-coral mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3.5 py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    <span className="neu-badge-coral-solid rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
                       Draft
                     </span>
-                    <span className="text-xs font-medium text-indigo-950">
+                    <span className="text-xs font-medium text-[var(--neu-text)]">
                       Saved draft — ready to edit or send
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       disabled={actionBusy}
                       onClick={() => onEditDraft(msg)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                      className="neu-btn-accent inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
                     >
-                      <Edit3 className="h-3.5 w-3.5" />
+                      <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
                       Edit Draft
                     </button>
                     <button
                       type="button"
                       disabled={actionBusy}
                       onClick={() => onSendDraft(msg)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50"
+                      className="neu-btn-success inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
                     >
-                      <Send className="h-3.5 w-3.5" />
+                      <Send className="h-3.5 w-3.5" aria-hidden="true" />
                       Send Now
                     </button>
                     <button
                       type="button"
                       disabled={actionBusy}
                       onClick={() => onDiscardDraft(msg)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                      className="neu-btn-danger inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       Discard
                     </button>
                   </div>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--neu-divider)] pb-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-900">
+                    <span className="text-sm font-semibold text-[var(--neu-text)]">
                       {msg.fromName ? `${msg.fromName} <${msg.fromAddress}>` : msg.fromAddress}
                     </span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        msg.direction === "inbound"
-                          ? "bg-slate-100 text-slate-600"
-                          : "bg-indigo-50 text-indigo-700"
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium ${
+                        msg.direction === "inbound" ? "neu-badge" : "neu-badge-coral"
                       }`}
                     >
                       {msg.direction === "inbound" ? "Inbound" : `Outbound · ${msg.status}`}
                     </span>
                     {msg.direction === "outbound" && isTracked && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
+                      <span className="neu-badge-success inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
                         Tracked
                       </span>
                     )}
                     {msg.createdByActor !== "inbound" && msg.createdByActor !== "owner" && (
-                      <span className="rounded bg-purple-50 px-2 py-0.5 font-mono text-[10px] text-purple-700">
+                      <span className="neu-badge-purple rounded-full px-2 py-0.5 font-mono text-[10px]">
                         {msg.createdByActor}
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-[var(--neu-text-muted)]">
                     To: {msg.toAddresses.join(", ")}
                     {msg.ccAddresses.length > 0 ? ` · Cc: ${msg.ccAddresses.join(", ")}` : ""}
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <time className="text-xs text-slate-400">
+                  <time className="text-xs text-[var(--neu-text-muted)]">
                     {new Date(msg.createdAt).toLocaleString()}
                   </time>
                   {msg.deliveryError && (
                     <div className="mt-1 flex flex-wrap items-center justify-end gap-2">
-                      <p className="text-xs font-medium text-rose-600">{msg.deliveryError}</p>
+                      <p className="text-xs font-medium text-[var(--neu-danger-text)]">
+                        {msg.deliveryError}
+                      </p>
                       {canRetryFailed && (
                         <button
                           type="button"
                           disabled={actionBusy}
                           onClick={() => onEditDraft(msg)}
-                          className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                          className="neu-btn-soft-coral inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
                         >
-                          <Edit3 className="h-3 w-3" />
+                          <Edit3 className="h-3 w-3" aria-hidden="true" />
                           Edit &amp; Retry
                         </button>
                       )}
@@ -460,9 +502,9 @@ export function ThreadView({
                         type="button"
                         disabled={actionBusy}
                         onClick={() => onEditDraft(msg)}
-                        className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                        className="neu-btn-soft-coral inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
                       >
-                        <Edit3 className="h-3 w-3" />
+                        <Edit3 className="h-3 w-3" aria-hidden="true" />
                         Edit &amp; Retry
                       </button>
                     </div>
@@ -470,15 +512,19 @@ export function ThreadView({
                 </div>
               </div>
 
-              <div className="mt-3">
-                <SanitizedEmailFrame htmlBody={msg.htmlBody} textBody={msg.textBody} />
+              <div className="mt-3.5">
+                <SanitizedEmailFrame
+                  htmlBody={msg.htmlBody}
+                  textBody={msg.textBody}
+                  resolvedTheme={resolvedTheme}
+                />
               </div>
 
               {/* R2 Attachments */}
               {msg.attachments.length > 0 && (
-                <div className="mt-4 border-t border-slate-100 pt-3">
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                    <Paperclip className="h-3.5 w-3.5" />
+                <div className="mt-4 border-t border-[var(--neu-divider)] pt-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--neu-text-secondary)]">
+                    <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
                     Attachments ({msg.attachments.length})
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -488,11 +534,16 @@ export function ThreadView({
                         href={`/api/admin/attachments/${encodeURIComponent(att.id)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
+                        className="neu-btn inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
                       >
-                        <Paperclip className="h-3 w-3 text-slate-400" />
+                        <Paperclip
+                          className="h-3 w-3 text-[var(--neu-coral-text)]"
+                          aria-hidden="true"
+                        />
                         <span className="max-w-[200px] truncate">{att.filename}</span>
-                        <span className="text-slate-400">({formatBytes(att.sizeBytes)})</span>
+                        <span className="text-[var(--neu-text-muted)]">
+                          ({formatBytes(att.sizeBytes)})
+                        </span>
                       </a>
                     ))}
                   </div>
@@ -501,18 +552,18 @@ export function ThreadView({
 
               {/* Delivery timeline for outbound messages */}
               {msg.deliveryEvents.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500">
+                <div className="mt-3.5 flex flex-wrap gap-2 border-t border-[var(--neu-divider)] pt-3 text-[11px]">
                   {msg.deliveryEvents.map((ev, idx) => {
                     const pillClass =
                       ev.type === "email.opened"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 font-medium"
+                        ? "neu-badge-success font-medium"
                         : ev.type === "email.clicked"
-                          ? "border-indigo-200 bg-indigo-50 text-indigo-700 font-medium"
-                          : "border-slate-100 bg-slate-50";
+                          ? "neu-badge-coral font-medium"
+                          : "neu-badge";
                     return (
                       <span
                         key={`${ev.type}-${idx}`}
-                        className={`rounded border px-2 py-0.5 ${pillClass}`}
+                        className={`rounded-full px-2.5 py-0.5 ${pillClass}`}
                       >
                         {ev.type} · {new Date(ev.timestamp).toLocaleTimeString()}
                         {ev.detail ? ` (${ev.detail})` : ""}
@@ -527,29 +578,29 @@ export function ThreadView({
 
         {/* Reply / Forward Bar */}
         {latestNonRejected && (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <button
               type="button"
               onClick={() => onReply(latestNonRejected, false)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700"
+              className="neu-btn-accent inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold"
             >
-              <Reply className="h-3.5 w-3.5" />
+              <Reply className="h-3.5 w-3.5" aria-hidden="true" />
               Reply
             </button>
             <button
               type="button"
               onClick={() => onReply(latestNonRejected, true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="neu-btn inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium"
             >
-              <ReplyAll className="h-3.5 w-3.5" />
+              <ReplyAll className="h-3.5 w-3.5" aria-hidden="true" />
               Reply All
             </button>
             <button
               type="button"
               onClick={() => onForward(latestNonRejected)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="neu-btn inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium"
             >
-              <Forward className="h-3.5 w-3.5" />
+              <Forward className="h-3.5 w-3.5" aria-hidden="true" />
               Forward
             </button>
           </div>

@@ -1,8 +1,9 @@
 /**
  * @file src/client/components/ComposerModal.tsx
- * @description Native modal <dialog> email composer supporting new compose, Reply, Reply All,
- * Forward, editing saved drafts, editing Pending Approval drafts, Markdown/HTML rendering,
- * R2 attachment uploads, and Cloudflare Workers AI reply assistance.
+ * @description Tactile Soft UI native modal `<dialog>` email composer supporting new compose,
+ * Reply, Reply All, Forward, editing saved drafts, editing Pending Approval drafts,
+ * Rich Text / Markdown / Plain Text modes, Resend open & link tracking toggle, R2 attachments,
+ * and Cloudflare Workers AI reply assistance.
  */
 
 import { Paperclip, Send, Sparkles, Trash2, X } from "lucide-react";
@@ -11,6 +12,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { AddressRecord, AppSettings, AttachmentRecord } from "../../shared/types";
 import { api } from "../lib/api";
 import { buildEmailIframeSrcDoc, plainTextToBasicHtml, sanitizeEmailHtml } from "../lib/sanitize";
+import type { ResolvedTheme } from "../lib/theme";
 import { RichTextEditor } from "./RichTextEditor";
 
 export interface ComposerInitialState {
@@ -37,6 +39,7 @@ interface ComposerModalProps {
   initial: ComposerInitialState | null;
   addresses: AddressRecord[];
   settings: AppSettings;
+  resolvedTheme: ResolvedTheme;
   onClose: () => void;
   onDiscardDraft?: (messageId: string, threadId?: string) => Promise<void> | void;
   onSuccess: (message: string) => void;
@@ -60,6 +63,7 @@ export function ComposerModal({
   initial,
   addresses,
   settings,
+  resolvedTheme,
   onClose,
   onDiscardDraft,
   onSuccess,
@@ -173,13 +177,13 @@ export function ComposerModal({
       const rawHtml = await marked.parse(body, { async: true });
       const sanitized = await sanitizeEmailHtml(rawHtml);
       if (!cancelled) {
-        setPreviewSrcDoc(buildEmailIframeSrcDoc(sanitized));
+        setPreviewSrcDoc(buildEmailIframeSrcDoc(sanitized, { theme: resolvedTheme }));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [previewHtml, body]);
+  }, [previewHtml, body, resolvedTheme]);
 
   function parseAddressList(raw: string): string[] {
     return raw
@@ -338,12 +342,12 @@ export function ComposerModal({
           onClose();
         }
       }}
-      className="m-auto w-[min(94vw,760px)] rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl"
+      className="neu-card-lg m-auto w-[min(94vw,760px)] rounded-3xl p-0"
     >
       <div className="flex flex-col">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-          <h2 id={titleId} className="text-base font-semibold text-slate-900">
+        <div className="flex items-center justify-between border-b border-[var(--neu-divider)] px-5 py-3.5">
+          <h2 id={titleId} className="text-base font-semibold text-[var(--neu-text)]">
             {initial?.mode === "approve_edit"
               ? "Edit & Approve Draft"
               : initial?.mode === "edit_draft"
@@ -357,7 +361,7 @@ export function ComposerModal({
           <button
             type="button"
             onClick={requestClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="neu-icon-btn h-8 w-8"
             aria-label="Close composer"
           >
             <X className="h-4 w-4" />
@@ -367,11 +371,13 @@ export function ComposerModal({
         {/* Reserved space for unsaved-changes confirmation (hidden with visibility so buttons never jump) */}
         <div
           aria-hidden={!showDiscardConfirm}
-          className={`flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900 ${
+          className={`flex items-center justify-between border-b border-[var(--neu-warning-border)] bg-[var(--neu-warning-bg)] px-5 py-2 text-xs text-[var(--neu-warning-text)] ${
             showDiscardConfirm ? "visible" : "invisible pointer-events-none"
           }`}
         >
-          <span id={confirmDescId}>Discard unsaved email changes?</span>
+          <span id={confirmDescId} className="font-medium">
+            Discard unsaved email changes?
+          </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -380,7 +386,7 @@ export function ComposerModal({
                 setShowDiscardConfirm(false);
                 onClose();
               }}
-              className="rounded-md bg-rose-600 px-2.5 py-1 font-semibold text-white hover:bg-rose-700"
+              className="neu-btn-danger-solid rounded-full px-3 py-1 text-xs font-semibold"
             >
               Discard
             </button>
@@ -390,7 +396,7 @@ export function ComposerModal({
               tabIndex={showDiscardConfirm ? 0 : -1}
               aria-describedby={confirmDescId}
               onClick={() => setShowDiscardConfirm(false)}
-              className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-900 hover:bg-amber-100"
+              className="neu-btn rounded-full px-3 py-1 text-xs font-medium"
             >
               Keep Editing
             </button>
@@ -400,7 +406,10 @@ export function ComposerModal({
         {/* Form Fields */}
         <div className="space-y-3 p-5">
           <div className="grid grid-cols-[72px_1fr] items-center gap-2">
-            <label htmlFor="compose-from" className="text-xs font-medium text-slate-500">
+            <label
+              htmlFor="compose-from"
+              className="text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               From
             </label>
             {activeAddresses.length > 0 ? (
@@ -408,7 +417,7 @@ export function ComposerModal({
                 id="compose-from"
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+                className="neu-input rounded-xl px-3 py-1.5 text-sm"
               >
                 {activeAddresses.map((a) => (
                   <option key={a.id} value={a.email}>
@@ -426,13 +435,16 @@ export function ComposerModal({
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
                 placeholder="you@yourdomain.com (configure in Settings -> Addresses)"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                className="neu-input rounded-xl px-3 py-1.5 text-sm"
               />
             )}
           </div>
 
           <div className="grid grid-cols-[72px_1fr_auto] items-center gap-2">
-            <label htmlFor="compose-to" className="text-xs font-medium text-slate-500">
+            <label
+              htmlFor="compose-to"
+              className="text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               To
             </label>
             <input
@@ -442,12 +454,12 @@ export function ComposerModal({
               value={to}
               onChange={(e) => setTo(e.target.value)}
               placeholder="recipient@example.com (comma separated)"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input rounded-xl px-3 py-1.5 text-sm"
             />
             <button
               type="button"
               onClick={() => setShowCcBcc((v) => !v)}
-              className="text-xs font-medium text-slate-500 hover:text-indigo-600"
+              className="neu-btn rounded-full px-3 py-1.5 text-xs font-medium text-[var(--neu-text-secondary)]"
             >
               Cc / Bcc
             </button>
@@ -456,7 +468,10 @@ export function ComposerModal({
           {showCcBcc && (
             <>
               <div className="grid grid-cols-[72px_1fr] items-center gap-2">
-                <label htmlFor="compose-cc" className="text-xs font-medium text-slate-500">
+                <label
+                  htmlFor="compose-cc"
+                  className="text-xs font-medium text-[var(--neu-text-secondary)]"
+                >
                   Cc
                 </label>
                 <input
@@ -465,11 +480,14 @@ export function ComposerModal({
                   value={cc}
                   onChange={(e) => setCc(e.target.value)}
                   placeholder="cc@example.com"
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                  className="neu-input rounded-xl px-3 py-1.5 text-sm"
                 />
               </div>
               <div className="grid grid-cols-[72px_1fr] items-center gap-2">
-                <label htmlFor="compose-bcc" className="text-xs font-medium text-slate-500">
+                <label
+                  htmlFor="compose-bcc"
+                  className="text-xs font-medium text-[var(--neu-text-secondary)]"
+                >
                   Bcc
                 </label>
                 <input
@@ -478,14 +496,17 @@ export function ComposerModal({
                   value={bcc}
                   onChange={(e) => setBcc(e.target.value)}
                   placeholder="bcc@example.com"
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                  className="neu-input rounded-xl px-3 py-1.5 text-sm"
                 />
               </div>
             </>
           )}
 
           <div className="grid grid-cols-[72px_1fr] items-center gap-2">
-            <label htmlFor="compose-subject" className="text-xs font-medium text-slate-500">
+            <label
+              htmlFor="compose-subject"
+              className="text-xs font-medium text-[var(--neu-text-secondary)]"
+            >
               Subject
             </label>
             <input
@@ -494,53 +515,43 @@ export function ComposerModal({
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Email subject"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+              className="neu-input rounded-xl px-3 py-1.5 text-sm"
             />
           </div>
 
-          {/* Editor Mode Switcher */}
+          {/* Editor Mode Segmented Pill Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <div className="neu-segmented text-xs">
               <button
                 type="button"
+                data-active={format === "rich"}
                 onClick={() => void handleFormatChange("rich")}
-                className={`rounded-md px-2.5 py-1 font-medium ${
-                  format === "rich"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600"
-                }`}
+                className="neu-segmented-btn px-3 py-1 font-medium"
               >
                 Rich Text
               </button>
               <button
                 type="button"
+                data-active={format === "markdown" && !previewHtml}
                 onClick={() => void handleFormatChange("markdown")}
-                className={`rounded-md px-2.5 py-1 font-medium ${
-                  format === "markdown" && !previewHtml
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600"
-                }`}
+                className="neu-segmented-btn px-3 py-1 font-medium"
               >
                 Markdown
               </button>
               <button
                 type="button"
+                data-active={format === "plain"}
                 onClick={() => void handleFormatChange("plain")}
-                className={`rounded-md px-2.5 py-1 font-medium ${
-                  format === "plain"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600"
-                }`}
+                className="neu-segmented-btn px-3 py-1 font-medium"
               >
                 Plain Text
               </button>
               {format === "markdown" && (
                 <button
                   type="button"
+                  data-active={previewHtml}
                   onClick={() => setPreviewHtml((p) => !p)}
-                  className={`rounded-md px-2.5 py-1 font-medium ${
-                    previewHtml ? "bg-indigo-600 text-white" : "text-slate-600"
-                  }`}
+                  className="neu-segmented-btn px-3 py-1 font-medium"
                 >
                   Preview HTML
                 </button>
@@ -552,9 +563,9 @@ export function ComposerModal({
                 type="button"
                 disabled={aiBusy}
                 onClick={handleAiDraftReply}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                className="neu-btn-soft-coral inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium"
               >
-                <Sparkles className="h-3.5 w-3.5" />
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                 {aiBusy ? "Drafting..." : "AI Draft Reply"}
               </button>
             )}
@@ -577,7 +588,7 @@ export function ComposerModal({
               sandbox="allow-popups allow-popups-to-escape-sandbox"
               referrerPolicy="no-referrer"
               srcDoc={previewSrcDoc}
-              className="h-[240px] w-full rounded-xl border border-slate-200 bg-white"
+              className="h-[240px] w-full rounded-2xl border border-[var(--neu-border)] bg-[var(--neu-inset)]"
             />
           ) : (
             <textarea
@@ -590,21 +601,29 @@ export function ComposerModal({
                   ? "Write your message (Markdown supported)..."
                   : "Write your plain text message..."
               }
-              className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-relaxed text-slate-900 focus:border-indigo-500 focus:outline-none"
+              className="neu-input w-full rounded-2xl p-3 text-sm leading-relaxed"
             />
           )}
 
-          {/* Resend Open & Click Tracking Option */}
+          {/* Resend Open & Click Tracking Switch */}
           {initial?.mode !== "approve_edit" && (
-            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600 select-none">
+            <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-3 text-xs text-[var(--neu-text-secondary)] select-none">
               <input
                 type="checkbox"
+                role="switch"
+                {...({ switch: "" } as Record<string, string>)}
                 checked={trackOpensAndClicks}
                 onChange={(e) => setTrackOpensAndClicks(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                className="neu-switch"
               />
-              <span>Enable Resend open &amp; link tracking</span>
-              <span className="text-[11px] text-slate-400">(adds a hidden tracking link)</span>
+              <span>
+                <span className="font-medium text-[var(--neu-text)]">
+                  Enable Resend open &amp; link tracking
+                </span>{" "}
+                <span className="text-[11px] text-[var(--neu-text-muted)]">
+                  (adds a hidden tracking link)
+                </span>
+              </span>
             </label>
           )}
 
@@ -614,14 +633,14 @@ export function ComposerModal({
               {attachments.map((att) => (
                 <span
                   key={att.id}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                  className="neu-inset inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-[var(--neu-text)]"
                 >
-                  <Paperclip className="h-3 w-3 text-slate-400" />
+                  <Paperclip className="h-3 w-3 text-[var(--neu-coral-text)]" aria-hidden="true" />
                   <span>{att.filename}</span>
                   <button
                     type="button"
                     onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
-                    className="text-slate-400 hover:text-rose-600"
+                    className="rounded-full p-0.5 text-[var(--neu-text-muted)] hover:text-[var(--neu-danger-text)]"
                     aria-label={`Remove ${att.filename}`}
                   >
                     <X className="h-3 w-3" />
@@ -633,10 +652,10 @@ export function ComposerModal({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3.5 rounded-b-2xl">
+        <div className="neu-panel flex flex-wrap items-center justify-between gap-2 rounded-b-3xl border-t border-[var(--neu-divider)] px-5 py-3.5">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-              <Paperclip className="h-3.5 w-3.5" />
+            <label className="neu-btn inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium">
+              <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{uploading ? "Uploading..." : "Attach File"}</span>
               <input
                 type="file"
@@ -660,9 +679,9 @@ export function ComposerModal({
                     setSending(false);
                   }
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                className="neu-btn-danger inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                 Discard Draft
               </button>
             )}
@@ -674,7 +693,7 @@ export function ComposerModal({
                 type="button"
                 disabled={sending}
                 onClick={() => void handleSubmit("draft")}
-                className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                className="neu-btn rounded-full px-4 py-2 text-xs font-medium"
               >
                 Save Draft
               </button>
@@ -683,9 +702,9 @@ export function ComposerModal({
               type="button"
               disabled={sending || uploading}
               onClick={() => void handleSubmit("send")}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              className="neu-btn-accent inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-xs font-semibold"
             >
-              <Send className="h-3.5 w-3.5" />
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
               {sending
                 ? "Sending..."
                 : initial?.mode === "approve_edit"

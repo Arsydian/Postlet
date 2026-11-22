@@ -1,7 +1,7 @@
 /**
  * @file src/client/components/DailyDigestsView.tsx
- * @description View displaying generated Daily Inbox Summaries (overview, interactive To-Dos,
- * reminders/deadlines, and FYI rollups) with click-through thread navigation.
+ * @description Tactile Soft UI view displaying generated Daily Inbox Summaries (overview,
+ * interactive To-Dos, reminders/deadlines, and FYI rollups) with click-through thread navigation.
  */
 
 import { Bell, CalendarClock, CheckSquare, ExternalLink, Menu, Sparkles, Square } from "lucide-react";
@@ -76,23 +76,23 @@ export function DailyDigestsView({
   const active = digests.find((d) => d.id === selectedId) ?? digests[0] ?? null;
 
   return (
-    <div className="flex h-full flex-1 flex-col overflow-hidden bg-slate-50">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
-        <div className="flex items-center gap-2.5">
+    <div className="neu-canvas flex h-full flex-1 flex-col overflow-hidden">
+      <header className="neu-panel flex flex-wrap items-center justify-between gap-3 border-b border-[var(--neu-divider)] px-5 py-4">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onOpenMobileNav}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
+            className="neu-icon-btn h-8 w-8 lg:hidden"
             aria-label="Open menu"
           >
             <Menu className="h-4 w-4" />
           </button>
           <div>
-            <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-              <Sparkles className="h-5 w-5 text-indigo-600" />
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-[var(--neu-text)]">
+              <Sparkles className="h-5 w-5 text-[var(--neu-coral-text)]" aria-hidden="true" />
               Daily Inbox Summaries
             </h1>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[var(--neu-text-muted)]">
               Actionable To-Dos, reminders, and executive rollups built by Cloudflare Workers AI.
             </p>
           </div>
@@ -103,7 +103,7 @@ export function DailyDigestsView({
             <button
               type="button"
               onClick={onOpenAiSettings}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 hover:bg-amber-100"
+              className="neu-alert-warning rounded-full px-3.5 py-2 text-xs font-semibold"
             >
               Enable Cloudflare AI in Settings →
             </button>
@@ -112,9 +112,9 @@ export function DailyDigestsView({
               type="button"
               disabled={generating}
               onClick={() => void handleGenerateNow()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+              className="neu-btn-accent inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold"
             >
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               {generating ? "Generating..." : "Generate Summary Now"}
             </button>
           )}
@@ -123,34 +123,37 @@ export function DailyDigestsView({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Digest history sidebar */}
-        <aside className="w-60 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-3 hidden sm:block">
-          <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <aside className="neu-panel hidden w-60 shrink-0 overflow-y-auto border-r border-[var(--neu-divider)] p-3 sm:block">
+          <p className="mb-2.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--neu-text-muted)]">
             History
           </p>
           {digests.length === 0 ? (
-            <p className="px-2 text-xs text-slate-500">
+            <p className="px-2 text-xs text-[var(--neu-text-muted)]">
               {loading ? "Loading..." : "No digests generated yet."}
             </p>
           ) : (
-            <div className="space-y-1">
-              {digests.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => setSelectedId(d.id)}
-                  className={`w-full rounded-lg px-3 py-2 text-left transition ${
-                    active?.id === d.id
-                      ? "bg-indigo-50 text-indigo-800"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="text-xs font-semibold">{d.digestDate}</div>
-                  <div className="mt-0.5 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>{d.todos.length} to-dos</span>
-                    <span>{d.triggeredBy}</span>
-                  </div>
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              {digests.map((d) => {
+                const isSelected = active?.id === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    data-active={isSelected}
+                    aria-current={isSelected ? "true" : undefined}
+                    onClick={() => setSelectedId(d.id)}
+                    className="neu-nav-item w-full rounded-2xl py-2.5 pl-4 pr-3 text-left"
+                  >
+                    <div className="text-xs font-semibold text-[var(--neu-text)]">
+                      {d.digestDate}
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between text-[11px] text-[var(--neu-text-muted)]">
+                      <span>{d.todos.length} to-dos</span>
+                      <span>{d.triggeredBy}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </aside>
@@ -158,12 +161,14 @@ export function DailyDigestsView({
         {/* Active Digest Body */}
         <div className="flex-1 overflow-y-auto p-5 lg:p-7">
           {!active ? (
-            <div className="mx-auto max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center">
-              <Sparkles className="mx-auto h-8 w-8 text-indigo-500" />
-              <h2 className="mt-3 text-base font-semibold text-slate-900">
+            <div className="neu-card mx-auto max-w-lg rounded-3xl p-8 text-center">
+              <div className="neu-inset mx-auto flex h-14 w-14 items-center justify-center rounded-full text-[var(--neu-coral-text)]">
+                <Sparkles className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <h2 className="mt-4 text-base font-semibold text-[var(--neu-text)]">
                 No Daily Summaries Yet
               </h2>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--neu-text-muted)]">
                 Enable Cloudflare Workers AI and the Daily Inbox Summary function in Settings to
                 receive scheduled briefings with extracted To-Dos and reminders, or generate one on
                 demand.
@@ -172,33 +177,40 @@ export function DailyDigestsView({
           ) : (
             <div className="mx-auto max-w-3xl space-y-5">
               {/* Overview */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="neu-card rounded-2xl p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-base font-semibold text-slate-900">
+                  <h2 className="text-base font-semibold text-[var(--neu-text)]">
                     Inbox Briefing · {active.digestDate}
                   </h2>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] text-slate-600">
+                  <span className="neu-badge rounded-full px-3 py-0.5 text-[11px] font-medium">
                     {active.sourceThreadCount} threads analyzed · {active.timezone}
                   </span>
                 </div>
-                <p className="mt-2.5 text-sm leading-relaxed text-slate-700">{active.overview}</p>
+                <p className="mt-2.5 text-sm leading-relaxed text-[var(--neu-text-secondary)]">
+                  {active.overview}
+                </p>
                 {active.emailedTo && (
-                  <p className="mt-2 text-xs text-emerald-700">
+                  <p className="mt-2 text-xs font-medium text-[var(--neu-success-text)]">
                     Digest emailed to {active.emailedTo}
                   </p>
                 )}
               </div>
 
               {/* To-Dos */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <CheckSquare className="h-4 w-4 text-indigo-600" />
+              <div className="neu-card rounded-2xl p-5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--neu-text)]">
+                  <CheckSquare
+                    className="h-4 w-4 text-[var(--neu-coral-text)]"
+                    aria-hidden="true"
+                  />
                   Action Items &amp; To-Dos ({active.todos.length})
                 </h3>
                 {active.todos.length === 0 ? (
-                  <p className="mt-2 text-xs text-slate-500">No action items extracted.</p>
+                  <p className="mt-2 text-xs text-[var(--neu-text-muted)]">
+                    No action items extracted.
+                  </p>
                 ) : (
-                  <ul className="mt-3 divide-y divide-slate-100">
+                  <ul className="mt-3 divide-y divide-[var(--neu-divider)]">
                     {active.todos.map((todo) => (
                       <li
                         key={todo.id}
@@ -207,25 +219,31 @@ export function DailyDigestsView({
                         <button
                           type="button"
                           onClick={() => void handleToggleTodo(active.id, todo.id, !todo.done)}
-                          className="flex flex-1 items-start gap-2.5 text-left"
+                          className="flex min-h-[36px] flex-1 items-start gap-2.5 text-left"
                         >
                           {todo.done ? (
-                            <CheckSquare className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                            <CheckSquare
+                              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--neu-success-text)]"
+                              aria-hidden="true"
+                            />
                           ) : (
-                            <Square className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            <Square
+                              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--neu-text-muted)]"
+                              aria-hidden="true"
+                            />
                           )}
                           <div>
                             <p
                               className={`text-sm ${
                                 todo.done
-                                  ? "text-slate-400 line-through"
-                                  : "font-medium text-slate-800"
+                                  ? "text-[var(--neu-text-muted)] line-through"
+                                  : "font-medium text-[var(--neu-text)]"
                               }`}
                             >
                               {todo.title}
                             </p>
                             {(todo.sender || todo.dueHint) && (
-                              <p className="mt-0.5 text-xs text-slate-500">
+                              <p className="mt-0.5 text-xs text-[var(--neu-text-muted)]">
                                 {[todo.sender, todo.dueHint].filter(Boolean).join(" · ")}
                               </p>
                             )}
@@ -235,10 +253,10 @@ export function DailyDigestsView({
                           <button
                             type="button"
                             onClick={() => onOpenThread(todo.threadId!)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-50"
+                            className="neu-btn inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold text-[var(--neu-coral-text)]"
                           >
                             <span>Open</span>
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
                           </button>
                         )}
                       </li>
@@ -248,32 +266,37 @@ export function DailyDigestsView({
               </div>
 
               {/* Reminders & Deadlines */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <CalendarClock className="h-4 w-4 text-amber-600" />
+              <div className="neu-card rounded-2xl p-5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--neu-text)]">
+                  <CalendarClock
+                    className="h-4 w-4 text-[var(--neu-warning-text)]"
+                    aria-hidden="true"
+                  />
                   Reminders &amp; Deadlines ({active.reminders.length})
                 </h3>
                 {active.reminders.length === 0 ? (
-                  <p className="mt-2 text-xs text-slate-500">No upcoming reminders found.</p>
+                  <p className="mt-2 text-xs text-[var(--neu-text-muted)]">
+                    No upcoming reminders found.
+                  </p>
                 ) : (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-2.5">
                     {active.reminders.map((rem, idx) => (
                       <div
                         key={`${rem.title}-${idx}`}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50/50 px-3.5 py-2.5"
+                        className="neu-alert-warning flex items-center justify-between gap-3 rounded-xl px-4 py-2.5"
                       >
                         <div>
-                          <p className="text-sm font-medium text-slate-800">{rem.title}</p>
-                          <p className="text-xs text-amber-800">{rem.when}</p>
+                          <p className="text-sm font-semibold">{rem.title}</p>
+                          <p className="text-xs opacity-90">{rem.when}</p>
                         </div>
                         {rem.threadId && (
                           <button
                             type="button"
                             onClick={() => onOpenThread(rem.threadId!)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+                            className="neu-btn inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold"
                           >
                             Open
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -284,20 +307,26 @@ export function DailyDigestsView({
 
               {/* FYI Rollup */}
               {active.fyi.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <Bell className="h-4 w-4 text-slate-500" />
+                <div className="neu-card rounded-2xl p-5">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--neu-text)]">
+                    <Bell
+                      className="h-4 w-4 text-[var(--neu-text-secondary)]"
+                      aria-hidden="true"
+                    />
                     FYI Rollup ({active.fyi.length})
                   </h3>
-                  <ul className="mt-2.5 space-y-1.5 text-sm text-slate-600">
+                  <ul className="mt-2.5 space-y-2 text-sm text-[var(--neu-text-secondary)]">
                     {active.fyi.map((item, idx) => (
-                      <li key={`${item.title}-${idx}`} className="flex items-center justify-between gap-2">
+                      <li
+                        key={`${item.title}-${idx}`}
+                        className="flex items-center justify-between gap-2"
+                      >
                         <span>• {item.title}</span>
                         {item.threadId && (
                           <button
                             type="button"
                             onClick={() => onOpenThread(item.threadId!)}
-                            className="text-xs font-medium text-indigo-600 hover:underline"
+                            className="text-xs font-semibold text-[var(--neu-coral-text)] hover:underline"
                           >
                             View
                           </button>

@@ -49,7 +49,7 @@ export function createApp(options?: CreateAppOptions) {
     return c.json({
       ok: true,
       service: c.env.APP_NAME || "Postlet",
-      version: c.env.APP_VERSION || "0.3.0",
+      version: c.env.APP_VERSION || "0.4.0",
     });
   });
 

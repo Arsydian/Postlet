@@ -511,7 +511,7 @@ export function RichTextEditor({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white focus-within:border-indigo-500">
+    <div className="neu-inset rounded-2xl focus-within:ring-2 focus-within:ring-[var(--neu-focus)]">
       {/* Accessible Rich Text Formatting Toolbar */}
       <div
         ref={toolbarRef}
@@ -519,7 +519,7 @@ export function RichTextEditor({
         {...({ focusgroup: "toolbar wrap" } as Record<string, string>)}
         aria-label="Text formatting"
         aria-controls={editorId}
-        className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50/80 px-2 py-1.5 rounded-t-xl"
+        className="neu-panel flex flex-wrap items-center gap-0.5 rounded-t-2xl border-b border-[var(--neu-divider)] px-2.5 py-2"
       >
         <div role="group" aria-label="Text style" className="flex items-center gap-0.5">
           <button
@@ -657,7 +657,7 @@ export function RichTextEditor({
       {/* Inline Hyperlink Input Bar (replaces browser prompt) */}
       {linkBarOpen && (
         <div
-          className="flex flex-wrap items-center gap-2 border-b border-indigo-100 bg-indigo-50/70 px-3 py-2 text-xs"
+          className="neu-alert-coral flex flex-wrap items-center gap-2 border-x-0 border-t-0 px-3 py-2 text-xs"
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.stopPropagation();
@@ -679,7 +679,7 @@ export function RichTextEditor({
             }}
             placeholder="https://example.com or mailto:..."
             aria-label="Link URL"
-            className="min-w-[180px] flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none"
+            className="neu-input min-w-[180px] flex-1 rounded-lg px-2.5 py-1 text-xs"
           />
           <input
             type="text"
@@ -687,13 +687,13 @@ export function RichTextEditor({
             onChange={(e) => setLinkText(e.target.value)}
             placeholder="Link text (optional)"
             aria-label="Link text"
-            className="min-w-[140px] flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none"
+            className="neu-input min-w-[140px] flex-1 rounded-lg px-2.5 py-1 text-xs"
           />
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={applyLink}
-              className="rounded-md bg-indigo-600 px-2.5 py-1 font-semibold text-white hover:bg-indigo-700"
+              className="neu-btn-accent rounded-full px-3 py-1 font-semibold"
             >
               Apply
             </button>
@@ -701,7 +701,7 @@ export function RichTextEditor({
               <button
                 type="button"
                 onClick={removeActiveLink}
-                className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2 py-1 font-medium text-rose-700 hover:bg-rose-50"
+                className="neu-btn-danger inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium"
               >
                 <Unlink className="h-3 w-3" aria-hidden="true" />
                 Remove
@@ -713,12 +713,16 @@ export function RichTextEditor({
                 setLinkBarOpen(false);
                 editorRef.current?.focus();
               }}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-700 hover:bg-slate-100"
+              className="neu-btn rounded-full px-2.5 py-1 font-medium"
             >
               Cancel
             </button>
           </div>
-          {linkError && <p className="w-full text-[11px] font-medium text-rose-600">{linkError}</p>}
+          {linkError && (
+            <p className="w-full text-[11px] font-medium text-[var(--neu-danger-text)]">
+              {linkError}
+            </p>
+          )}
         </div>
       )}
 
