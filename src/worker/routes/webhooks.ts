@@ -147,6 +147,8 @@ export function createWebhookRoutes(resendFetchFn?: typeof fetch) {
         "email.delivery_delayed",
         "email.bounced",
         "email.complained",
+        "email.opened",
+        "email.clicked",
       ].includes(payload.type)
     ) {
       const updateResult = await applyDeliveryWebhookEvent(
@@ -156,6 +158,7 @@ export function createWebhookRoutes(resendFetchFn?: typeof fetch) {
           email_id?: string;
           bounce?: { message?: string; subType?: string; type?: string };
           reason?: string;
+          click?: { link?: string; ipAddress?: string; timestamp?: string };
         },
         payload.created_at,
       );

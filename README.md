@@ -1,10 +1,10 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.2.0-indigo)
+# Postlet ![Version](https://img.shields.io/badge/version-0.3.0-indigo)
 
 Self-hosted, single-owner email client and AI-agent mail gateway running on **Cloudflare Workers** and **Resend** — designed to deploy directly from a synced GitHub repository and run comfortably inside Cloudflare's Free Tier.
 
 ## Features
 
-- **Full-Featured Web Inbox** (`/`): Clean, responsive 3-pane UI with folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Markdown/HTML composer, Reply / Reply All / Forward, and live delivery status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`).
+- **Full-Featured Web Inbox** (`/`): Clean, responsive 3-pane UI with folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Rich Text (Bold, Italic, Underline, Strikethrough, Code, Headings, Lists, Blockquotes, Links), Markdown, and Plain Text composer, saved draft editing/discarding, Reply / Reply All / Forward, optional Resend open & link tracking checkbox, and live delivery + engagement status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`, `email.opened`, `email.clicked`).
 - **Catch-All & Address Manager**: Accept mail for `*@yourdomain.com` via Resend inbound webhooks, configure sender aliases in **Settings → Addresses & Domain**, and filter inbox threads per address.
 - **Cloudflare Zero Trust Access Authentication**: Protects the Web UI and `/api/admin/*` with cryptographic RS256 JWKS verification of `Cf-Access-Jwt-Assertion` tokens.
 - **Built-In Cloudflare Workers AI Agent (`postlet-ai`)** *(Disabled by default)*: Uses your native Cloudflare `AI` binding (10,000 free Neurons/day). Toggle on in **Settings → AI Agent** to unlock:
@@ -158,6 +158,8 @@ If you want defense at Cloudflare's edge *in addition to* Worker authentication:
    - `email.delivery_delayed`
    - `email.bounced`
    - `email.complained`
+   - `email.opened` *(optional, when using Resend Open Tracking)*
+   - `email.clicked` *(optional, when using Resend Click Tracking)*
 4. Copy the Signing Secret (`whsec_...`) into Cloudflare Worker Secret `RESEND_WEBHOOK_SECRET`.
 
 ### 6. First Login & Optional AI Activation

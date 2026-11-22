@@ -553,9 +553,45 @@ export async function ingestInboundEmail(
   };
 }
 
+function escapeHtmlForEmail(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function plainTextToEmailHtml(text: string): string {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "<p></p>";
+  return normalized
+    .split(/\n{2,}/)
+    .map((para) => `<p>${escapeHtmlForEmail(para).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+}
+
 /**
- * Applies Resend outbound delivery lifecycle webhook events (`email.sent`, `email.delivered`,
- * `email.delivery_delayed`, `email.bounced`, `email.complained`) onto the matching message row.
+ * Appends a visually hidden link inside an HTML email body (converting plain-text-only messages
+ * to basic HTML when needed) so Resend Click & Open tracking wraps an active link for every tracked send.
+ */
+function appendHiddenResendTrackingLink(
+  htmlBody: string,
+  textBody: string,
+  trackingUrl: string,
+): string {
+  const baseHtml = htmlBody.trim() ? htmlBody : plainTextToEmailHtml(textBody);
+  const hiddenBlock = `<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;" aria-hidden="true"><a href="${escapeHtmlForEmail(trackingUrl)}" tabindex="-1" style="color:transparent;text-decoration:none;font-size:1px;line-height:1px;">&#8203;</a></div>`;
+  if (/<\/body>/i.test(baseHtml)) {
+    return baseHtml.replace(/<\/body>/i, `${hiddenBlock}</body>`);
+  }
+  return `${baseHtml}\n${hiddenBlock}`;
+}
+
+/**
+ * Applies Resend outbound delivery lifecycle and engagement webhook events (`email.sent`,
+ * `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`,
+ * `email.opened`, `email.clicked`) onto the matching message row.
  */
 export async function applyDeliveryWebhookEvent(
   db: D1Database,
@@ -564,6 +600,7 @@ export async function applyDeliveryWebhookEvent(
     email_id?: string;
     bounce?: { message?: string; subType?: string; type?: string };
     reason?: string;
+    click?: { link?: string; ipAddress?: string; timestamp?: string };
   },
   createdAt?: string,
 ): Promise<{ updated: boolean; messageId?: string; status?: MessageStatus }> {
@@ -581,6 +618,24 @@ export async function applyDeliveryWebhookEvent(
     return { updated: false };
   }
 
+  const events = safeJsonParse<DeliveryEvent[]>(row.delivery_events_json, []);
+
+  if (eventType === "email.opened" || eventType === "email.clicked") {
+    const clickDetail = eventType === "email.clicked" ? eventData.click?.link?.trim() : undefined;
+    events.push({
+      type: eventType,
+      timestamp: createdAt || new Date().toISOString(),
+      ...(clickDetail ? { detail: clickDetail } : {}),
+    });
+
+    await db
+      .prepare(`UPDATE messages SET delivery_events_json = ?, updated_at = ? WHERE id = ?`)
+      .bind(JSON.stringify(events), new Date().toISOString(), row.id)
+      .run();
+
+    return { updated: true, messageId: row.id, status: row.status };
+  }
+
   const statusMap: Record<string, MessageStatus> = {
     "email.sent": "sent",
     "email.delivered": "delivered",
@@ -594,7 +649,6 @@ export async function applyDeliveryWebhookEvent(
     return { updated: false };
   }
 
-  const events = safeJsonParse<DeliveryEvent[]>(row.delivery_events_json, []);
   const detail =
     eventData.bounce?.message ||
     eventData.reason ||
@@ -639,6 +693,7 @@ export interface SendOrDraftInput {
   forwardMessageId?: string;
   attachmentIds?: string[];
   extraHeaders?: Record<string, string>;
+  trackOpensAndClicks?: boolean;
 }
 
 export interface ActorContext {
@@ -825,6 +880,7 @@ export async function sendOrDraftEmail(
     "message-id": rfcMessageId,
     ...(inReplyTo ? { "in-reply-to": inReplyTo } : {}),
     ...(referencesHeader ? { references: referencesHeader } : {}),
+    ...(input.trackOpensAndClicks ? { "x-postlet-track": "true" } : {}),
   };
 
   await db
@@ -907,6 +963,15 @@ async function dispatchMessageViaResend(
     outboundHeaders["Auto-Submitted"] = stripCrlf(parsedHeaders["auto-submitted"]);
   }
 
+  let outboundHtml = row.html_body;
+  if (parsedHeaders["x-postlet-track"] === "true") {
+    const senderDomain = row.from_address.split("@")[1]?.trim() ?? "";
+    if (senderDomain && !/[\s"<>]/.test(senderDomain)) {
+      const trackingUrl = `https://${senderDomain}`;
+      outboundHtml = appendHiddenResendTrackingLink(row.html_body, row.text_body, trackingUrl);
+    }
+  }
+
   try {
     const sent = await resendClient.sendEmail({
       from: formattedFrom,
@@ -916,7 +981,7 @@ async function dispatchMessageViaResend(
       ...(row.reply_to ? { reply_to: stripCrlf(row.reply_to) } : {}),
       subject: stripCrlf(row.subject),
       ...(row.text_body ? { text: row.text_body } : {}),
-      ...(row.html_body ? { html: row.html_body } : {}),
+      ...(outboundHtml ? { html: outboundHtml } : {}),
       ...(Object.keys(outboundHeaders).length > 0 ? { headers: outboundHeaders } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
     });
@@ -1040,6 +1105,7 @@ export interface UpdateDraftInput {
   textBody?: string;
   htmlBody?: string;
   attachmentIds?: string[];
+  trackOpensAndClicks?: boolean;
 }
 
 /**
@@ -1085,6 +1151,15 @@ export async function updateDraftMessage(
   const snippet = createSnippet(textBody, htmlBody);
   const now = new Date().toISOString();
 
+  const updatedHeaders = safeJsonParse<Record<string, string>>(existing.headers_json, {});
+  if (input.trackOpensAndClicks !== undefined) {
+    if (input.trackOpensAndClicks) {
+      updatedHeaders["x-postlet-track"] = "true";
+    } else {
+      delete updatedHeaders["x-postlet-track"];
+    }
+  }
+
   await db
     .prepare(
       `UPDATE messages
@@ -1097,6 +1172,7 @@ export async function updateDraftMessage(
            subject = ?,
            text_body = ?,
            html_body = ?,
+           headers_json = ?,
            status = 'draft',
            folder = 'drafts',
            delivery_error = NULL,
@@ -1113,6 +1189,7 @@ export async function updateDraftMessage(
       subject,
       textBody,
       htmlBody,
+      JSON.stringify(updatedHeaders),
       now,
       messageId,
     )

@@ -65,6 +65,7 @@ export const sendOrDraftMessageSchema = z.object({
   replyToMessageId: z.string().trim().min(1).optional(),
   forwardMessageId: z.string().trim().min(1).optional(),
   attachmentIds: z.array(z.string().trim().min(1)).max(20).optional().default([]),
+  trackOpensAndClicks: z.boolean().optional().default(false),
 });
 
 /**
@@ -143,6 +144,7 @@ export const updateDraftMessageSchema = z.object({
   textBody: z.string().max(500_000).optional().default(""),
   htmlBody: z.string().max(1_000_000).optional().default(""),
   attachmentIds: z.array(z.string().trim().min(1)).max(20).optional(),
+  trackOpensAndClicks: z.boolean().optional(),
 });
 
 export const updateThreadSchema = z.object({

@@ -299,6 +299,9 @@ export default function App() {
       bcc: msg.bccAddresses.join(", "),
       subject: msg.subject,
       body: msg.textBody,
+      htmlBody: msg.htmlBody,
+      initialFormat: msg.htmlBody ? "rich" : "plain",
+      trackOpensAndClicks: msg.headers["x-postlet-track"] === "true",
     });
     setComposerOpen(true);
   }
@@ -314,8 +317,10 @@ export default function App() {
       bcc: msg.bccAddresses.join(", "),
       subject: msg.subject,
       body: msg.textBody,
+      htmlBody: msg.htmlBody,
       attachments: msg.attachments,
-      initialFormat: msg.htmlBody ? "markdown" : "plain",
+      initialFormat: msg.htmlBody ? "rich" : "plain",
+      trackOpensAndClicks: msg.headers["x-postlet-track"] === "true",
     });
     setComposerOpen(true);
   }
@@ -333,6 +338,7 @@ export default function App() {
         textBody: msg.textBody,
         htmlBody: msg.htmlBody,
         attachmentIds: msg.attachments.map((a) => a.id),
+        trackOpensAndClicks: msg.headers["x-postlet-track"] === "true",
       });
       await refreshAll();
       showToast("success", "Draft sent via Resend.");

@@ -119,6 +119,7 @@ export const api = {
     replyToMessageId?: string;
     forwardMessageId?: string;
     attachmentIds?: string[];
+    trackOpensAndClicks?: boolean;
   }): Promise<{ message: MessageRecord; threadId: string }> {
     return requestJson<{ message: MessageRecord; threadId: string }>("/api/admin/messages", {
       method: "POST",
@@ -139,6 +140,7 @@ export const api = {
       textBody: string;
       htmlBody: string;
       attachmentIds?: string[];
+      trackOpensAndClicks?: boolean;
     },
   ): Promise<{ message: MessageRecord; threadId: string }> {
     return requestJson<{ message: MessageRecord; threadId: string }>(

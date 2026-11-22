@@ -10,7 +10,8 @@ import { marked } from "marked";
 import { useEffect, useId, useRef, useState } from "react";
 import type { AddressRecord, AppSettings, AttachmentRecord } from "../../shared/types";
 import { api } from "../lib/api";
-import { buildEmailIframeSrcDoc, sanitizeEmailHtml } from "../lib/sanitize";
+import { buildEmailIframeSrcDoc, plainTextToBasicHtml, sanitizeEmailHtml } from "../lib/sanitize";
+import { RichTextEditor } from "./RichTextEditor";
 
 export interface ComposerInitialState {
   mode: "new" | "reply" | "forward" | "approve_edit" | "edit_draft";
@@ -25,8 +26,10 @@ export interface ComposerInitialState {
   bcc: string;
   subject: string;
   body: string;
+  htmlBody?: string;
   attachments?: AttachmentRecord[];
-  initialFormat?: "markdown" | "plain";
+  initialFormat?: "rich" | "markdown" | "plain";
+  trackOpensAndClicks?: boolean;
 }
 
 interface ComposerModalProps {
@@ -47,7 +50,9 @@ interface ComposerSnapshot {
   bcc: string;
   subject: string;
   body: string;
+  richHtml: string;
   attachmentIdsKey: string;
+  trackOpensAndClicks: boolean;
 }
 
 export function ComposerModal({
@@ -72,10 +77,13 @@ export function ComposerModal({
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [format, setFormat] = useState<"markdown" | "plain">("markdown");
+  const [richHtml, setRichHtml] = useState("");
+  const [richSyncKey, setRichSyncKey] = useState(0);
+  const [format, setFormat] = useState<"rich" | "markdown" | "plain">("rich");
   const [previewHtml, setPreviewHtml] = useState(false);
   const [previewSrcDoc, setPreviewSrcDoc] = useState("");
   const [attachments, setAttachments] = useState<AttachmentRecord[]>([]);
+  const [trackOpensAndClicks, setTrackOpensAndClicks] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<ComposerSnapshot>({
     fromAddress: "",
     to: "",
@@ -83,7 +91,9 @@ export function ComposerModal({
     bcc: "",
     subject: "",
     body: "",
+    richHtml: "",
     attachmentIdsKey: "",
+    trackOpensAndClicks: false,
   });
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -98,13 +108,21 @@ export function ComposerModal({
     bcc !== initialSnapshot.bcc ||
     subject !== initialSnapshot.subject ||
     body !== initialSnapshot.body ||
-    currentAttachmentKey !== initialSnapshot.attachmentIdsKey;
+    (format === "rich" && richHtml !== initialSnapshot.richHtml) ||
+    currentAttachmentKey !== initialSnapshot.attachmentIdsKey ||
+    trackOpensAndClicks !== initialSnapshot.trackOpensAndClicks;
 
   useEffect(() => {
     if (isOpen && initial) {
       const defaultAddr = addresses.find((a) => a.isDefault)?.email ?? addresses[0]?.email ?? "";
       const resolvedFrom = initial.fromAddress || defaultAddr;
       const initialAttachments = initial.attachments ?? [];
+      const nextFormat = initial.initialFormat ?? "rich";
+      const nextHtml = initial.htmlBody?.trim()
+        ? initial.htmlBody
+        : plainTextToBasicHtml(initial.body);
+      const nextTrack = Boolean(initial.trackOpensAndClicks);
+
       setFromAddress(resolvedFrom);
       setTo(initial.to);
       setCc(initial.cc);
@@ -112,8 +130,11 @@ export function ComposerModal({
       setShowCcBcc(Boolean(initial.cc || initial.bcc));
       setSubject(initial.subject);
       setBody(initial.body);
-      setFormat(initial.initialFormat ?? "markdown");
+      setRichHtml(nextHtml);
+      setRichSyncKey((k) => k + 1);
+      setFormat(nextFormat);
       setAttachments(initialAttachments);
+      setTrackOpensAndClicks(nextTrack);
       setInitialSnapshot({
         fromAddress: resolvedFrom,
         to: initial.to,
@@ -121,7 +142,9 @@ export function ComposerModal({
         bcc: initial.bcc,
         subject: initial.subject,
         body: initial.body,
+        richHtml: nextHtml,
         attachmentIdsKey: initialAttachments.map((a) => a.id).join(","),
+        trackOpensAndClicks: nextTrack,
       });
       setPreviewHtml(false);
       setShowDiscardConfirm(false);
@@ -191,12 +214,29 @@ export function ComposerModal({
     }
   }
 
+  async function handleFormatChange(nextFormat: "rich" | "markdown" | "plain") {
+    if (nextFormat === "rich" && format !== "rich") {
+      const nextHtml =
+        format === "markdown"
+          ? await sanitizeEmailHtml(await marked.parse(body, { async: true }))
+          : plainTextToBasicHtml(body);
+      setRichHtml(nextHtml);
+      setRichSyncKey((k) => k + 1);
+    }
+    setFormat(nextFormat);
+    setPreviewHtml(false);
+  }
+
   async function handleAiDraftReply() {
     if (!initial?.threadId) return;
     setAiBusy(true);
     try {
       const res = await api.suggestReply(initial.threadId, body.trim());
       setBody(res.replyText);
+      if (format === "rich") {
+        setRichHtml(plainTextToBasicHtml(res.replyText));
+        setRichSyncKey((k) => k + 1);
+      }
     } catch (err) {
       onError(err instanceof Error ? err.message : "AI draft generation failed");
     } finally {
@@ -218,9 +258,11 @@ export function ComposerModal({
     setSending(true);
     try {
       const renderedHtml =
-        format === "markdown"
-          ? await sanitizeEmailHtml(await marked.parse(body, { async: true }))
-          : "";
+        format === "rich"
+          ? await sanitizeEmailHtml(richHtml)
+          : format === "markdown"
+            ? await sanitizeEmailHtml(await marked.parse(body, { async: true }))
+            : "";
 
       if (initial?.mode === "approve_edit" && initial.pendingMessageId && mode === "send") {
         await api.approveMessage(initial.pendingMessageId, {
@@ -243,6 +285,7 @@ export function ComposerModal({
           textBody: body,
           htmlBody: renderedHtml,
           attachmentIds: attachments.map((a) => a.id),
+          trackOpensAndClicks,
         });
         onSuccess(mode === "send" ? "Email sent via Resend." : "Draft updated.");
       } else {
@@ -259,6 +302,7 @@ export function ComposerModal({
           replyToMessageId: initial?.replyToMessageId,
           forwardMessageId: initial?.forwardMessageId,
           attachmentIds: attachments.map((a) => a.id),
+          trackOpensAndClicks,
         });
         onSuccess(mode === "send" ? "Email sent via Resend." : "Draft saved.");
       }
@@ -454,15 +498,23 @@ export function ComposerModal({
             />
           </div>
 
-          {/* Editor Toolbar */}
+          {/* Editor Mode Switcher */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
               <button
                 type="button"
-                onClick={() => {
-                  setFormat("markdown");
-                  setPreviewHtml(false);
-                }}
+                onClick={() => void handleFormatChange("rich")}
+                className={`rounded-md px-2.5 py-1 font-medium ${
+                  format === "rich"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-600"
+                }`}
+              >
+                Rich Text
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleFormatChange("markdown")}
                 className={`rounded-md px-2.5 py-1 font-medium ${
                   format === "markdown" && !previewHtml
                     ? "bg-white text-slate-900 shadow-xs"
@@ -473,12 +525,9 @@ export function ComposerModal({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setFormat("plain");
-                  setPreviewHtml(false);
-                }}
+                onClick={() => void handleFormatChange("plain")}
                 className={`rounded-md px-2.5 py-1 font-medium ${
-                  format === "plain" && !previewHtml
+                  format === "plain"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-600"
                 }`}
@@ -511,7 +560,18 @@ export function ComposerModal({
             )}
           </div>
 
-          {previewHtml ? (
+          {format === "rich" ? (
+            <RichTextEditor
+              initialHtml={richHtml}
+              syncKey={richSyncKey}
+              autoFocus={initial?.mode === "reply"}
+              placeholder="Write your rich-text message..."
+              onChange={({ html, text }) => {
+                setRichHtml(html);
+                setBody(text);
+              }}
+            />
+          ) : previewHtml ? (
             <iframe
               title="Email Markdown preview"
               sandbox="allow-popups allow-popups-to-escape-sandbox"
@@ -532,6 +592,20 @@ export function ComposerModal({
               }
               className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-relaxed text-slate-900 focus:border-indigo-500 focus:outline-none"
             />
+          )}
+
+          {/* Resend Open & Click Tracking Option */}
+          {initial?.mode !== "approve_edit" && (
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600 select-none">
+              <input
+                type="checkbox"
+                checked={trackOpensAndClicks}
+                onChange={(e) => setTrackOpensAndClicks(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span>Enable Resend open &amp; link tracking</span>
+              <span className="text-[11px] text-slate-400">(adds a hidden tracking link)</span>
+            </label>
           )}
 
           {/* Attachments List */}

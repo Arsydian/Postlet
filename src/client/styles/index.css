@@ -19,3 +19,154 @@ dialog::backdrop {
   background: rgb(15 23 42 / 0.48);
   backdrop-filter: blur(2px);
 }
+
+/*
+ * Accessible formatting toolbar styles per modern-web-guidance `toolbar` guide:
+ * minimum 28x28 target sizes (36x36 on touch), visible :focus-visible outline,
+ * ARIA-driven [aria-pressed="true"] states, border-drawn separators, and
+ * media-gated hover / reduced-motion transitions.
+ */
+.postlet-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  color: rgb(51 65 85);
+  background: transparent;
+  cursor: pointer;
+}
+
+.postlet-toolbar-btn:focus-visible {
+  outline: 2px solid rgb(79 70 229);
+  outline-offset: 2px;
+}
+
+.postlet-toolbar-btn[aria-pressed="true"] {
+  background: rgb(238 242 255);
+  color: rgb(67 56 202);
+  box-shadow: inset 0 0 0 1.5px rgb(79 70 229);
+}
+
+.postlet-toolbar-sep {
+  display: inline-block;
+  align-self: stretch;
+  inline-size: 0;
+  margin: 3px 2px;
+  border-inline-start: 1px solid rgb(203 213 225);
+}
+
+@media (hover: hover) {
+  .postlet-toolbar-btn:hover {
+    background: rgb(241 245 249);
+    color: rgb(15 23 42);
+  }
+
+  .postlet-toolbar-btn[aria-pressed="true"]:hover {
+    background: rgb(224 231 255);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .postlet-toolbar-btn {
+    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  }
+}
+
+@media (pointer: coarse) {
+  .postlet-toolbar-btn {
+    min-inline-size: 36px;
+    min-block-size: 36px;
+  }
+}
+
+@media (forced-colors: active) {
+  .postlet-toolbar-btn {
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+
+  .postlet-toolbar-btn[aria-pressed="true"] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+    forced-color-adjust: none;
+  }
+}
+
+/* Rich text email canvas typography */
+.postlet-richtext {
+  min-height: 210px;
+  max-height: 360px;
+  overflow-y: auto;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgb(15 23 42);
+  word-break: break-word;
+}
+
+.postlet-richtext:empty::before {
+  content: attr(data-placeholder);
+  color: rgb(148 163 184);
+  pointer-events: none;
+}
+
+.postlet-richtext p {
+  margin: 0 0 0.5rem;
+}
+
+.postlet-richtext p:last-child {
+  margin-bottom: 0;
+}
+
+.postlet-richtext h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0.5rem 0;
+  color: rgb(15 23 42);
+}
+
+.postlet-richtext ul {
+  list-style: disc;
+  padding-left: 1.35rem;
+  margin: 0.4rem 0;
+}
+
+.postlet-richtext ol {
+  list-style: decimal;
+  padding-left: 1.35rem;
+  margin: 0.4rem 0;
+}
+
+.postlet-richtext blockquote {
+  border-left: 3px solid rgb(203 213 225);
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: rgb(71 85 105);
+}
+
+.postlet-richtext code {
+  background: rgb(241 245 249);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.postlet-richtext a {
+  color: rgb(79 70 229);
+  text-decoration: underline;
+}
+
+.postlet-richtext u {
+  text-decoration: underline;
+}
+
+.postlet-richtext s,
+.postlet-richtext strike {
+  text-decoration: line-through;
+}

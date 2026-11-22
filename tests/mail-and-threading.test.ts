@@ -535,4 +535,100 @@ describe("Mail Threading, Search & Approval Flows", () => {
     expect(remainingThread?.messages).toHaveLength(1);
     expect(remainingThread?.snippet).toContain("Original inbound snippet text");
   });
+
+  it("injects hidden Resend tracking link when trackOpensAndClicks is enabled and preserves state across draft edits", async () => {
+    await createAddress(env.DB, {
+      email: "owner@mail.example.com",
+      displayName: "Owner",
+      isDefault: true,
+    });
+
+    const sentPayloads: Array<Record<string, unknown>> = [];
+    const mockResend = createMockResendFetch({
+      onSend: (payload) => sentPayloads.push(payload),
+    });
+    const app = createApp({ resendFetchFn: mockResend.fetchFn });
+    const testEnv = buildTestEnv();
+
+    // 1. Plain-text email sent with trackOpensAndClicks=true -> injects HTML + hidden tracking link, no x-postlet-track header leaked
+    const sendPlainRes = await app.fetch(
+      new Request("http://localhost/api/admin/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Postlet-CSRF": "1",
+        },
+        body: JSON.stringify({
+          mode: "send",
+          to: ["recipient@example.org"],
+          subject: "Tracked Plain Email",
+          textBody: "Line one\n\nLine two",
+          htmlBody: "",
+          trackOpensAndClicks: true,
+        }),
+      }),
+      testEnv,
+    );
+    expect(sendPlainRes.status).toBe(200);
+    const sentPlain = (await sendPlainRes.json()) as {
+      message: { headers: Record<string, string> };
+    };
+    expect(sentPlain.message.headers["x-postlet-track"]).toBe("true");
+    expect(sentPayloads).toHaveLength(1);
+    expect(String(sentPayloads[0].html)).toContain("<p>Line one</p><p>Line two</p>");
+    expect(String(sentPayloads[0].html)).toContain('href="https://mail.example.com"');
+    expect(String(sentPayloads[0].html)).toContain("display:none");
+    expect((sentPayloads[0].headers as Record<string, string>)["x-postlet-track"]).toBeUndefined();
+
+    // 2. Save rich HTML draft with trackOpensAndClicks=true, then toggle off before sending
+    const draftRes = await app.fetch(
+      new Request("http://localhost/api/admin/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Postlet-CSRF": "1",
+        },
+        body: JSON.stringify({
+          mode: "draft",
+          to: ["recipient@example.org"],
+          subject: "Rich Draft",
+          textBody: "Hello bold world",
+          htmlBody: "<p>Hello <strong>bold</strong> world</p>",
+          trackOpensAndClicks: true,
+        }),
+      }),
+      testEnv,
+    );
+    expect(draftRes.status).toBe(201);
+    const draftJson = (await draftRes.json()) as {
+      message: { id: string; headers: Record<string, string> };
+    };
+    expect(draftJson.message.headers["x-postlet-track"]).toBe("true");
+
+    const untrackedSendRes = await app.fetch(
+      new Request(`http://localhost/api/admin/messages/${draftJson.message.id}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "X-Postlet-CSRF": "1",
+        },
+        body: JSON.stringify({
+          mode: "send",
+          to: ["recipient@example.org"],
+          subject: "Rich Draft Untracked",
+          textBody: "Hello bold world",
+          htmlBody: "<p>Hello <strong>bold</strong> world</p>",
+          trackOpensAndClicks: false,
+        }),
+      }),
+      testEnv,
+    );
+    expect(untrackedSendRes.status).toBe(200);
+    const untrackedJson = (await untrackedSendRes.json()) as {
+      message: { headers: Record<string, string> };
+    };
+    expect(untrackedJson.message.headers["x-postlet-track"]).toBeUndefined();
+    expect(sentPayloads).toHaveLength(2);
+    expect(sentPayloads[1].html).toBe("<p>Hello <strong>bold</strong> world</p>");
+  });
 });

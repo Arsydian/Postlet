@@ -16,6 +16,7 @@ const ALLOWED_EMAIL_TAGS = [
   "em",
   "u",
   "s",
+  "strike",
   "a",
   "ul",
   "ol",
@@ -101,6 +102,58 @@ export async function sanitizeEmailHtml(rawHtml: string): Promise<string> {
 
   const DOMPurify = await loadDomPurify();
   return DOMPurify.sanitize(rawHtml, {
+    ALLOWED_TAGS: [...ALLOWED_EMAIL_TAGS, "#text"],
+    ALLOWED_ATTR: ALLOWED_EMAIL_ATTRS,
+    ALLOW_ARIA_ATTR: false,
+    ALLOW_DATA_ATTR: false,
+    KEEP_CONTENT: false,
+  });
+}
+
+/**
+ * Escapes plain text into basic semantic `<p>`/`<br>` HTML suitable for initializing
+ * the rich-text composer from a plain-text body or AI draft suggestion.
+ */
+export function plainTextToBasicHtml(text: string): string {
+  const normalized = text.replace(/\r\n/g, "\n");
+  if (!normalized.trim()) {
+    return "";
+  }
+  const escaped = normalized
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  return escaped
+    .split(/\n{2,}/)
+    .map((para) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+/**
+ * Safely populates a live DOM container element with untrusted or editable HTML,
+ * preferring native `Element.prototype.setHTML` and lazily falling back to DOMPurify.
+ */
+export async function safeSetElementHtml(el: HTMLElement, rawHtml: string): Promise<void> {
+  if (!rawHtml.trim()) {
+    el.replaceChildren();
+    return;
+  }
+
+  if (hasNativeSetHtml(el)) {
+    el.setHTML(rawHtml, {
+      sanitizer: {
+        elements: ALLOWED_EMAIL_TAGS,
+        attributes: ALLOWED_EMAIL_ATTRS,
+      },
+    });
+    return;
+  }
+
+  const DOMPurify = await loadDomPurify();
+  el.innerHTML = DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: [...ALLOWED_EMAIL_TAGS, "#text"],
     ALLOWED_ATTR: ALLOWED_EMAIL_ATTRS,
     ALLOW_ARIA_ATTR: false,

@@ -232,4 +232,99 @@ describe("Resend Webhooks (Inbound & Delivery Status)", () => {
     expect(detail?.messages[0].status).toBe("bounced");
     expect(detail?.messages[0].deliveryError).toContain("550 5.1.1 User unknown");
   });
+
+  it("records email.opened and email.clicked Resend tracking webhooks without altering delivered status", async () => {
+    await createAddress(env.DB, { email: "vip@mail.example.com", isDefault: true });
+
+    const mockResend = createMockResendFetch();
+    const testEnv = buildTestEnv();
+    const app = createApp({ resendFetchFn: mockResend.fetchFn });
+
+    const sendRes = await app.fetch(
+      new Request("http://localhost/api/admin/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Postlet-CSRF": "1",
+        },
+        body: JSON.stringify({
+          mode: "send",
+          to: ["reader@example.org"],
+          subject: "Tracked Engagement Test",
+          textBody: "Hello reader",
+          trackOpensAndClicks: true,
+        }),
+      }),
+      testEnv,
+    );
+    expect(sendRes.status).toBe(200);
+    const sentJson = (await sendRes.json()) as {
+      message: { id: string; resendEmailId: string };
+      threadId: string;
+    };
+
+    const deliveredPayload = JSON.stringify({
+      type: "email.delivered",
+      created_at: "2026-11-22T18:10:00.000Z",
+      data: { email_id: sentJson.message.resendEmailId },
+    });
+    expect(
+      (
+        await app.fetch(
+          new Request("http://localhost/api/webhooks/resend", {
+            method: "POST",
+            headers: await createSignedWebhookHeaders(deliveredPayload, testEnv.RESEND_WEBHOOK_SECRET!),
+            body: deliveredPayload,
+          }),
+          testEnv,
+        )
+      ).status,
+    ).toBe(200);
+
+    const openedPayload = JSON.stringify({
+      type: "email.opened",
+      created_at: "2026-11-22T18:11:00.000Z",
+      data: { email_id: sentJson.message.resendEmailId },
+    });
+    const openRes = await app.fetch(
+      new Request("http://localhost/api/webhooks/resend", {
+        method: "POST",
+        headers: await createSignedWebhookHeaders(openedPayload, testEnv.RESEND_WEBHOOK_SECRET!),
+        body: openedPayload,
+      }),
+      testEnv,
+    );
+    expect(openRes.status).toBe(200);
+
+    const clickedPayload = JSON.stringify({
+      type: "email.clicked",
+      created_at: "2026-11-22T18:12:00.000Z",
+      data: {
+        email_id: sentJson.message.resendEmailId,
+        click: { link: "https://mail.example.com" },
+      },
+    });
+    const clickRes = await app.fetch(
+      new Request("http://localhost/api/webhooks/resend", {
+        method: "POST",
+        headers: await createSignedWebhookHeaders(clickedPayload, testEnv.RESEND_WEBHOOK_SECRET!),
+        body: clickedPayload,
+      }),
+      testEnv,
+    );
+    expect(clickRes.status).toBe(200);
+
+    const detail = await getThreadDetail(env.DB, sentJson.threadId);
+    const msg = detail?.messages[0];
+    expect(msg?.status).toBe("delivered");
+    expect(msg?.deliveryEvents.map((e) => e.type)).toEqual([
+      "email.sent",
+      "email.delivered",
+      "email.opened",
+      "email.clicked",
+    ]);
+    expect(msg?.deliveryEvents.find((e) => e.type === "email.clicked")?.detail).toBe(
+      "https://mail.example.com",
+    );
+  });
 });

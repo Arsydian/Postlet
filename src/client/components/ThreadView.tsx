@@ -351,6 +351,7 @@ export function ThreadView({
 
           const isDraft = msg.status === "draft";
           const canRetryFailed = msg.status === "failed" && !msg.resendEmailId;
+          const isTracked = msg.headers["x-postlet-track"] === "true";
 
           return (
             <article
@@ -416,6 +417,11 @@ export function ThreadView({
                     >
                       {msg.direction === "inbound" ? "Inbound" : `Outbound · ${msg.status}`}
                     </span>
+                    {msg.direction === "outbound" && isTracked && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
+                        Tracked
+                      </span>
+                    )}
                     {msg.createdByActor !== "inbound" && msg.createdByActor !== "owner" && (
                       <span className="rounded bg-purple-50 px-2 py-0.5 font-mono text-[10px] text-purple-700">
                         {msg.createdByActor}
@@ -496,15 +502,23 @@ export function ThreadView({
               {/* Delivery timeline for outbound messages */}
               {msg.deliveryEvents.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500">
-                  {msg.deliveryEvents.map((ev, idx) => (
-                    <span
-                      key={`${ev.type}-${idx}`}
-                      className="rounded bg-slate-50 px-2 py-0.5 border border-slate-100"
-                    >
-                      {ev.type} · {new Date(ev.timestamp).toLocaleTimeString()}
-                      {ev.detail ? ` (${ev.detail})` : ""}
-                    </span>
-                  ))}
+                  {msg.deliveryEvents.map((ev, idx) => {
+                    const pillClass =
+                      ev.type === "email.opened"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 font-medium"
+                        : ev.type === "email.clicked"
+                          ? "border-indigo-200 bg-indigo-50 text-indigo-700 font-medium"
+                          : "border-slate-100 bg-slate-50";
+                    return (
+                      <span
+                        key={`${ev.type}-${idx}`}
+                        className={`rounded border px-2 py-0.5 ${pillClass}`}
+                      >
+                        {ev.type} · {new Date(ev.timestamp).toLocaleTimeString()}
+                        {ev.detail ? ` (${ev.detail})` : ""}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </article>
