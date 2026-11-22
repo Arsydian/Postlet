@@ -303,6 +303,64 @@ export default function App() {
     setComposerOpen(true);
   }
 
+  function openEditDraft(msg: MessageRecord) {
+    setComposerInitial({
+      mode: "edit_draft",
+      draftMessageId: msg.id,
+      threadId: msg.threadId,
+      fromAddress: msg.fromAddress,
+      to: msg.toAddresses.join(", "),
+      cc: msg.ccAddresses.join(", "),
+      bcc: msg.bccAddresses.join(", "),
+      subject: msg.subject,
+      body: msg.textBody,
+      attachments: msg.attachments,
+      initialFormat: msg.htmlBody ? "markdown" : "plain",
+    });
+    setComposerOpen(true);
+  }
+
+  async function handleSendDraft(msg: MessageRecord) {
+    setActionBusy(true);
+    try {
+      await api.updateDraftMessage(msg.id, {
+        mode: "send",
+        fromAddress: msg.fromAddress,
+        to: msg.toAddresses,
+        cc: msg.ccAddresses,
+        bcc: msg.bccAddresses,
+        subject: msg.subject,
+        textBody: msg.textBody,
+        htmlBody: msg.htmlBody,
+        attachmentIds: msg.attachments.map((a) => a.id),
+      });
+      await refreshAll();
+      showToast("success", "Draft sent via Resend.");
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Failed to send draft");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function handleDiscardDraft(messageId: string, threadId?: string) {
+    setActionBusy(true);
+    try {
+      const res = await api.deleteDraftMessage(messageId);
+      if (res.threadDeleted && selectedThreadId && (!threadId || selectedThreadId === threadId)) {
+        setSelectedThreadId(null);
+        setSelectedThread(null);
+      }
+      setComposerOpen(false);
+      await refreshAll();
+      showToast("success", "Draft discarded.");
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Failed to discard draft");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   if (!meta) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
@@ -389,6 +447,9 @@ export default function App() {
                 onApprovePending={(id) => void handleApprovePending(id)}
                 onEditPending={openEditPending}
                 onRejectPending={(id) => void handleRejectPending(id)}
+                onEditDraft={openEditDraft}
+                onSendDraft={(msg) => void handleSendDraft(msg)}
+                onDiscardDraft={(msg) => void handleDiscardDraft(msg.id, msg.threadId)}
                 onOpenAiSettings={() => {
                   setActiveSection("settings");
                   setSettingsTab("ai");
@@ -432,6 +493,7 @@ export default function App() {
         addresses={meta.addresses}
         settings={meta.settings}
         onClose={() => setComposerOpen(false)}
+        onDiscardDraft={handleDiscardDraft}
         onSuccess={(msg) => {
           showToast("success", msg);
           void refreshAll();

@@ -281,6 +281,61 @@ export async function claimPendingAttachments(
 }
 
 /**
+ * Synchronizes attachments on an edited draft message by removing deselected attachments
+ * (from both R2 and D1) and claiming newly staged uploads belonging to no message yet.
+ */
+export async function syncDraftAttachments(
+  db: D1Database,
+  r2: R2Bucket,
+  messageId: string,
+  desiredAttachmentIds: string[],
+): Promise<void> {
+  const desiredSet = new Set(desiredAttachmentIds);
+  const { results } = await db
+    .prepare(`SELECT id, r2_key FROM attachments WHERE message_id = ?`)
+    .bind(messageId)
+    .all<{ id: string; r2_key: string }>();
+
+  const existing = results ?? [];
+  const existingIds = new Set(existing.map((r) => r.id));
+
+  for (const row of existing) {
+    if (!desiredSet.has(row.id)) {
+      await r2.delete(row.r2_key);
+      await db
+        .prepare(`DELETE FROM attachments WHERE id = ? AND message_id = ?`)
+        .bind(row.id, messageId)
+        .run();
+    }
+  }
+
+  const toClaim = Array.from(desiredSet).filter((id) => !existingIds.has(id));
+  if (toClaim.length > 0) {
+    await claimPendingAttachments(db, toClaim, messageId);
+  }
+}
+
+/**
+ * Deletes all R2 binary objects and D1 attachment rows associated with a discarded message.
+ */
+export async function deleteAttachmentsForMessage(
+  db: D1Database,
+  r2: R2Bucket,
+  messageId: string,
+): Promise<void> {
+  const { results } = await db
+    .prepare(`SELECT r2_key FROM attachments WHERE message_id = ?`)
+    .bind(messageId)
+    .all<{ r2_key: string }>();
+
+  for (const row of results ?? []) {
+    await r2.delete(row.r2_key);
+  }
+
+  await db.prepare(`DELETE FROM attachments WHERE message_id = ?`).bind(messageId).run();
+}
+
+/**
  * Fetches attachment metadata rows for a list of message IDs in a single D1 query.
  */
 export async function listAttachmentsByMessageIds(

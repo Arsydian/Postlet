@@ -56,7 +56,7 @@ describe("Automatic D1 Schema Bootstrap", () => {
 
     expect(res.status).toBe(200);
     const meta = (await res.json()) as AdminMetaResponse;
-    expect(meta.appVersion).toBe("0.1.4");
+    expect(meta.appVersion).toBe("0.2.0");
     expect(meta.settings.aiEnabled).toBe(false);
 
     // Verify all 9 tables, 3 FTS5 sync triggers, and 9 composite indexes exist.
@@ -159,7 +159,7 @@ describe("Automatic D1 Schema Bootstrap", () => {
     expect(body).toEqual({
       ok: true,
       service: "Postlet",
-      version: "0.1.4",
+      version: "0.2.0",
     });
 
     const tableRows = await env.DB.prepare(

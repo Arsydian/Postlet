@@ -8,12 +8,14 @@ import {
   Archive,
   ArrowLeft,
   Bot,
+  Edit3,
   Forward,
   Inbox,
   MailOpen,
   Paperclip,
   Reply,
   ReplyAll,
+  Send,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -38,6 +40,9 @@ interface ThreadViewProps {
   onApprovePending: (messageId: string) => void;
   onEditPending: (message: MessageRecord) => void;
   onRejectPending: (messageId: string) => void;
+  onEditDraft: (message: MessageRecord) => void;
+  onSendDraft: (message: MessageRecord) => void;
+  onDiscardDraft: (message: MessageRecord) => void;
   onOpenAiSettings: () => void;
 }
 
@@ -155,6 +160,9 @@ export function ThreadView({
   onApprovePending,
   onEditPending,
   onRejectPending,
+  onEditDraft,
+  onSendDraft,
+  onDiscardDraft,
   onOpenAiSettings,
 }: ThreadViewProps) {
   if (!thread) {
@@ -172,9 +180,11 @@ export function ThreadView({
     );
   }
 
-  const latestNonRejected =
-    [...thread.messages].reverse().find((m) => m.status !== "pending_approval" && m.status !== "rejected") ??
-    thread.messages[thread.messages.length - 1];
+  const latestNonRejected = [...thread.messages]
+    .reverse()
+    .find(
+      (m) => m.status !== "pending_approval" && m.status !== "rejected" && m.status !== "draft",
+    );
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-slate-50/50">
@@ -339,11 +349,58 @@ export function ThreadView({
             );
           }
 
+          const isDraft = msg.status === "draft";
+          const canRetryFailed = msg.status === "failed" && !msg.resendEmailId;
+
           return (
             <article
               key={msg.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs"
+              className={`rounded-xl border bg-white p-4 shadow-xs ${
+                isDraft ? "border-indigo-200 ring-1 ring-indigo-100" : "border-slate-200"
+              }`}
             >
+              {isDraft && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                      Draft
+                    </span>
+                    <span className="text-xs font-medium text-indigo-950">
+                      Saved draft — ready to edit or send
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => onEditDraft(msg)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit Draft
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => onSendDraft(msg)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Send Now
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => onDiscardDraft(msg)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -376,7 +433,33 @@ export function ThreadView({
                     {new Date(msg.createdAt).toLocaleString()}
                   </time>
                   {msg.deliveryError && (
-                    <p className="mt-1 text-xs font-medium text-rose-600">{msg.deliveryError}</p>
+                    <div className="mt-1 flex flex-wrap items-center justify-end gap-2">
+                      <p className="text-xs font-medium text-rose-600">{msg.deliveryError}</p>
+                      {canRetryFailed && (
+                        <button
+                          type="button"
+                          disabled={actionBusy}
+                          onClick={() => onEditDraft(msg)}
+                          className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          Edit &amp; Retry
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {!msg.deliveryError && canRetryFailed && (
+                    <div className="mt-1 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => onEditDraft(msg)}
+                        className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        Edit &amp; Retry
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

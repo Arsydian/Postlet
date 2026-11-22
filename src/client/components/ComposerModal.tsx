@@ -1,11 +1,11 @@
 /**
  * @file src/client/components/ComposerModal.tsx
  * @description Native modal <dialog> email composer supporting new compose, Reply, Reply All,
- * Forward, editing Pending Approval drafts, Markdown/HTML rendering, R2 attachment uploads,
- * and Cloudflare Workers AI reply assistance.
+ * Forward, editing saved drafts, editing Pending Approval drafts, Markdown/HTML rendering,
+ * R2 attachment uploads, and Cloudflare Workers AI reply assistance.
  */
 
-import { Paperclip, Send, Sparkles, X } from "lucide-react";
+import { Paperclip, Send, Sparkles, Trash2, X } from "lucide-react";
 import { marked } from "marked";
 import { useEffect, useId, useRef, useState } from "react";
 import type { AddressRecord, AppSettings, AttachmentRecord } from "../../shared/types";
@@ -13,7 +13,8 @@ import { api } from "../lib/api";
 import { buildEmailIframeSrcDoc, sanitizeEmailHtml } from "../lib/sanitize";
 
 export interface ComposerInitialState {
-  mode: "new" | "reply" | "forward" | "approve_edit";
+  mode: "new" | "reply" | "forward" | "approve_edit" | "edit_draft";
+  draftMessageId?: string;
   pendingMessageId?: string;
   threadId?: string;
   replyToMessageId?: string;
@@ -24,6 +25,8 @@ export interface ComposerInitialState {
   bcc: string;
   subject: string;
   body: string;
+  attachments?: AttachmentRecord[];
+  initialFormat?: "markdown" | "plain";
 }
 
 interface ComposerModalProps {
@@ -32,8 +35,19 @@ interface ComposerModalProps {
   addresses: AddressRecord[];
   settings: AppSettings;
   onClose: () => void;
+  onDiscardDraft?: (messageId: string, threadId?: string) => Promise<void> | void;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
+}
+
+interface ComposerSnapshot {
+  fromAddress: string;
+  to: string;
+  cc: string;
+  bcc: string;
+  subject: string;
+  body: string;
+  attachmentIdsKey: string;
 }
 
 export function ComposerModal({
@@ -42,13 +56,14 @@ export function ComposerModal({
   addresses,
   settings,
   onClose,
+  onDiscardDraft,
   onSuccess,
   onError,
 }: ComposerModalProps) {
   const titleId = useId();
   const confirmDescId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const discardButtonRef = useRef<HTMLButtonElement>(null);
+  const keepEditingButtonRef = useRef<HTMLButtonElement>(null);
 
   const [fromAddress, setFromAddress] = useState("");
   const [to, setTo] = useState("");
@@ -61,24 +76,53 @@ export function ComposerModal({
   const [previewHtml, setPreviewHtml] = useState(false);
   const [previewSrcDoc, setPreviewSrcDoc] = useState("");
   const [attachments, setAttachments] = useState<AttachmentRecord[]>([]);
+  const [initialSnapshot, setInitialSnapshot] = useState<ComposerSnapshot>({
+    fromAddress: "",
+    to: "",
+    cc: "",
+    bcc: "",
+    subject: "",
+    body: "",
+    attachmentIdsKey: "",
+  });
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
-  const isDirty = Boolean(to.trim() || subject.trim() || body.trim() || attachments.length > 0);
+  const currentAttachmentKey = attachments.map((a) => a.id).join(",");
+  const isDirty =
+    fromAddress !== initialSnapshot.fromAddress ||
+    to !== initialSnapshot.to ||
+    cc !== initialSnapshot.cc ||
+    bcc !== initialSnapshot.bcc ||
+    subject !== initialSnapshot.subject ||
+    body !== initialSnapshot.body ||
+    currentAttachmentKey !== initialSnapshot.attachmentIdsKey;
 
   useEffect(() => {
     if (isOpen && initial) {
       const defaultAddr = addresses.find((a) => a.isDefault)?.email ?? addresses[0]?.email ?? "";
-      setFromAddress(initial.fromAddress || defaultAddr);
+      const resolvedFrom = initial.fromAddress || defaultAddr;
+      const initialAttachments = initial.attachments ?? [];
+      setFromAddress(resolvedFrom);
       setTo(initial.to);
       setCc(initial.cc);
       setBcc(initial.bcc);
       setShowCcBcc(Boolean(initial.cc || initial.bcc));
       setSubject(initial.subject);
       setBody(initial.body);
-      setAttachments([]);
+      setFormat(initial.initialFormat ?? "markdown");
+      setAttachments(initialAttachments);
+      setInitialSnapshot({
+        fromAddress: resolvedFrom,
+        to: initial.to,
+        cc: initial.cc,
+        bcc: initial.bcc,
+        subject: initial.subject,
+        body: initial.body,
+        attachmentIdsKey: initialAttachments.map((a) => a.id).join(","),
+      });
       setPreviewHtml(false);
       setShowDiscardConfirm(false);
     }
@@ -124,7 +168,7 @@ export function ComposerModal({
   function requestClose() {
     if (isDirty && !sending) {
       setShowDiscardConfirm(true);
-      queueMicrotask(() => discardButtonRef.current?.focus());
+      queueMicrotask(() => keepEditingButtonRef.current?.focus());
       return;
     }
     onClose();
@@ -188,6 +232,19 @@ export function ComposerModal({
           htmlBody: renderedHtml,
         });
         onSuccess("Draft approved and sent via Resend.");
+      } else if (initial?.mode === "edit_draft" && initial.draftMessageId) {
+        await api.updateDraftMessage(initial.draftMessageId, {
+          mode,
+          fromAddress: fromAddress || undefined,
+          to: toList,
+          cc: parseAddressList(cc),
+          bcc: parseAddressList(bcc),
+          subject: subject.trim(),
+          textBody: body,
+          htmlBody: renderedHtml,
+          attachmentIds: attachments.map((a) => a.id),
+        });
+        onSuccess(mode === "send" ? "Email sent via Resend." : "Draft updated.");
       } else {
         await api.sendOrDraftMessage({
           mode,
@@ -224,7 +281,7 @@ export function ComposerModal({
         if (isDirty) {
           e.preventDefault();
           setShowDiscardConfirm(true);
-          queueMicrotask(() => discardButtonRef.current?.focus());
+          queueMicrotask(() => keepEditingButtonRef.current?.focus());
         } else {
           onClose();
         }
@@ -245,11 +302,13 @@ export function ComposerModal({
           <h2 id={titleId} className="text-base font-semibold text-slate-900">
             {initial?.mode === "approve_edit"
               ? "Edit & Approve Draft"
-              : initial?.mode === "reply"
-                ? "Reply"
-                : initial?.mode === "forward"
-                  ? "Forward Message"
-                  : "New Message"}
+              : initial?.mode === "edit_draft"
+                ? "Edit Draft"
+                : initial?.mode === "reply"
+                  ? "Reply"
+                  : initial?.mode === "forward"
+                    ? "Forward Message"
+                    : "New Message"}
           </h2>
           <button
             type="button"
@@ -261,18 +320,18 @@ export function ComposerModal({
           </button>
         </div>
 
-        {/* Reserved space for unsaved-changes confirmation so buttons never jump */}
+        {/* Reserved space for unsaved-changes confirmation (hidden with visibility so buttons never jump) */}
         <div
+          aria-hidden={!showDiscardConfirm}
           className={`flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900 ${
-            showDiscardConfirm ? "visible" : "hidden"
+            showDiscardConfirm ? "visible" : "invisible pointer-events-none"
           }`}
         >
           <span id={confirmDescId}>Discard unsaved email changes?</span>
           <div className="flex items-center gap-2">
             <button
-              ref={discardButtonRef}
               type="button"
-              aria-describedby={confirmDescId}
+              tabIndex={showDiscardConfirm ? 0 : -1}
               onClick={() => {
                 setShowDiscardConfirm(false);
                 onClose();
@@ -282,7 +341,10 @@ export function ComposerModal({
               Discard
             </button>
             <button
+              ref={keepEditingButtonRef}
               type="button"
+              tabIndex={showDiscardConfirm ? 0 : -1}
+              aria-describedby={confirmDescId}
               onClick={() => setShowDiscardConfirm(false)}
               className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-900 hover:bg-amber-100"
             >
@@ -498,17 +560,39 @@ export function ComposerModal({
 
         {/* Footer */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3.5 rounded-b-2xl">
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            <Paperclip className="h-3.5 w-3.5" />
-            <span>{uploading ? "Uploading..." : "Attach File"}</span>
-            <input
-              type="file"
-              multiple
-              disabled={uploading}
-              onChange={(e) => void handleFileUpload(e.target.files)}
-              className="sr-only"
-            />
-          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              <Paperclip className="h-3.5 w-3.5" />
+              <span>{uploading ? "Uploading..." : "Attach File"}</span>
+              <input
+                type="file"
+                multiple
+                disabled={uploading}
+                onChange={(e) => void handleFileUpload(e.target.files)}
+                className="sr-only"
+              />
+            </label>
+            {initial?.mode === "edit_draft" && initial.draftMessageId && onDiscardDraft && (
+              <button
+                type="button"
+                disabled={sending || uploading}
+                onClick={async () => {
+                  const id = initial.draftMessageId;
+                  if (!id) return;
+                  setSending(true);
+                  try {
+                    await onDiscardDraft(id, initial.threadId);
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Discard Draft
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             {initial?.mode !== "approve_edit" && (

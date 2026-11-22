@@ -16,6 +16,7 @@ import {
   sendOrDraftMessageSchema,
   toggleTodoSchema,
   updateAddressSchema,
+  updateDraftMessageSchema,
   updateSettingsSchema,
   updateThreadSchema,
 } from "../../shared/schemas";
@@ -52,12 +53,14 @@ import {
 import { getAttachmentResponse, storeAttachment } from "../services/attachments";
 import {
   approvePendingMessage,
+  deleteDraftMessage,
   deleteThreadPermanently,
   getFolderCounts,
   getThreadDetail,
   listThreads,
   rejectPendingMessage,
   sendOrDraftEmail,
+  updateDraftMessage,
   updateThread,
 } from "../services/mail";
 import { ResendClient } from "../services/resend";
@@ -94,7 +97,7 @@ export function createAdminRoutes(options?: {
 
     return c.json({
       appName: c.env.APP_NAME || "Postlet",
-      appVersion: c.env.APP_VERSION || "0.1.4",
+      appVersion: c.env.APP_VERSION || "0.2.0",
       ownerEmail: c.get("ownerEmail") ?? "owner",
       counts,
       settings,
@@ -231,6 +234,61 @@ export function createAdminRoutes(options?: {
       status: "allowed",
     });
     return c.json({ ok: true });
+  });
+
+  router.patch("/messages/:id", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = updateDraftMessageSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "Validation failed", issues: parsed.error.flatten() }, 400);
+    }
+
+    const messageId = c.req.param("id");
+    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", options?.resendFetchFn);
+    try {
+      const result = await updateDraftMessage(
+        c.env.DB,
+        c.env.ATTACHMENTS,
+        resendClient,
+        messageId,
+        parsed.data,
+      );
+      await recordAuditLog(c.env.DB, {
+        actorType: "owner",
+        actorLabel: c.get("ownerEmail") ?? "owner",
+        action: parsed.data.mode === "send" ? "owner:send_draft" : "owner:update_draft",
+        resourceType: "message",
+        resourceId: result.message.id,
+        status: "allowed",
+      });
+      return c.json(result, 200);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to update draft";
+      const status = msg.toLowerCase().includes("not found") ? 404 : 400;
+      return c.json({ error: msg }, status);
+    }
+  });
+
+  router.delete("/messages/:id", async (c) => {
+    const messageId = c.req.param("id");
+    try {
+      const res = await deleteDraftMessage(c.env.DB, c.env.ATTACHMENTS, messageId);
+      if (!res.deleted) {
+        return c.json({ error: "Draft message not found" }, 404);
+      }
+      await recordAuditLog(c.env.DB, {
+        actorType: "owner",
+        actorLabel: c.get("ownerEmail") ?? "owner",
+        action: "owner:discard_draft",
+        resourceType: "message",
+        resourceId: messageId,
+        status: "allowed",
+      });
+      return c.json({ ok: true, threadDeleted: res.threadDeleted });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to discard draft";
+      return c.json({ error: msg }, 400);
+    }
   });
 
   // ---------------------------------------------------------------------------

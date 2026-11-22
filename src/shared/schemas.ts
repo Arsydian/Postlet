@@ -131,6 +131,20 @@ export const approveMessageSchema = z.object({
   htmlBody: z.string().max(1_000_000).optional(),
 });
 
+export const updateDraftMessageSchema = z.object({
+  mode: z.enum(["draft", "send"]).default("draft"),
+  fromAddressId: z.string().trim().min(1).optional(),
+  fromAddress: emailSchema.optional(),
+  to: z.array(emailSchema).min(1).max(50),
+  cc: z.array(emailSchema).max(50).optional().default([]),
+  bcc: z.array(emailSchema).max(50).optional().default([]),
+  replyTo: emailSchema.optional(),
+  subject: z.string().trim().min(1).max(998),
+  textBody: z.string().max(500_000).optional().default(""),
+  htmlBody: z.string().max(1_000_000).optional().default(""),
+  attachmentIds: z.array(z.string().trim().min(1)).max(20).optional(),
+});
+
 export const updateThreadSchema = z.object({
   folder: z.enum(["inbox", "archive", "trash"]).optional(),
   isRead: z.boolean().optional(),

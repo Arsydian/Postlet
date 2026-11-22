@@ -126,6 +126,37 @@ export const api = {
     });
   },
 
+  updateDraftMessage(
+    id: string,
+    payload: {
+      mode: "draft" | "send";
+      fromAddressId?: string;
+      fromAddress?: string;
+      to: string[];
+      cc?: string[];
+      bcc?: string[];
+      subject: string;
+      textBody: string;
+      htmlBody: string;
+      attachmentIds?: string[];
+    },
+  ): Promise<{ message: MessageRecord; threadId: string }> {
+    return requestJson<{ message: MessageRecord; threadId: string }>(
+      `/api/admin/messages/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  deleteDraftMessage(id: string): Promise<{ ok: boolean; threadDeleted: boolean }> {
+    return requestJson<{ ok: boolean; threadDeleted: boolean }>(
+      `/api/admin/messages/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
   approveMessage(
     id: string,
     edits?: {

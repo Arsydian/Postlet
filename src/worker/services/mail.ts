@@ -26,9 +26,11 @@ import {
 } from "./addresses";
 import {
   claimPendingAttachments,
+  deleteAttachmentsForMessage,
   listAttachmentsByMessageIds,
   loadAttachmentsForResend,
   ingestResendAttachments,
+  syncDraftAttachments,
 } from "./attachments";
 import type { ResendClient, ResendWebhookAttachmentMeta } from "./resend";
 
@@ -1024,6 +1026,237 @@ export async function rejectPendingMessage(db: D1Database, messageId: string): P
     .bind(new Date().toISOString(), messageId)
     .run();
   return (res.meta.changes ?? 0) > 0;
+}
+
+export interface UpdateDraftInput {
+  mode: "draft" | "send";
+  fromAddressId?: string;
+  fromAddress?: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  replyTo?: string;
+  subject: string;
+  textBody?: string;
+  htmlBody?: string;
+  attachmentIds?: string[];
+}
+
+/**
+ * Updates an existing saved draft (or unsent failed outbound message) in place, syncs R2
+ * attachments, updates parent thread metadata, and optionally dispatches it immediately via Resend.
+ */
+export async function updateDraftMessage(
+  db: D1Database,
+  r2: R2Bucket,
+  resendClient: ResendClient,
+  messageId: string,
+  input: UpdateDraftInput,
+): Promise<{ message: MessageRecord; threadId: string }> {
+  const existing = await db
+    .prepare(`SELECT * FROM messages WHERE id = ?`)
+    .bind(messageId)
+    .first<MessageRow>();
+
+  if (!existing) {
+    throw new Error("Draft message not found");
+  }
+
+  const isEditable =
+    existing.status === "draft" ||
+    (existing.status === "failed" && existing.resend_email_id === null);
+  if (!isEditable) {
+    throw new Error(
+      `Only draft or unsent failed messages can be edited (current status: '${existing.status}')`,
+    );
+  }
+
+  const sender = await resolveSenderAddress(db, {
+    fromAddressId: input.fromAddressId,
+    fromAddress: input.fromAddress ?? existing.from_address,
+  });
+
+  const toList = input.to.map((e) => e.toLowerCase());
+  const ccList = (input.cc ?? []).map((e) => e.toLowerCase());
+  const bccList = (input.bcc ?? []).map((e) => e.toLowerCase());
+  const subject = input.subject.trim();
+  const textBody = input.textBody ?? "";
+  const htmlBody = input.htmlBody ?? "";
+  const snippet = createSnippet(textBody, htmlBody);
+  const now = new Date().toISOString();
+
+  await db
+    .prepare(
+      `UPDATE messages
+       SET from_address = ?,
+           from_name = ?,
+           to_addresses_json = ?,
+           cc_addresses_json = ?,
+           bcc_addresses_json = ?,
+           reply_to = ?,
+           subject = ?,
+           text_body = ?,
+           html_body = ?,
+           status = 'draft',
+           folder = 'drafts',
+           delivery_error = NULL,
+           updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(
+      sender.email,
+      sender.displayName,
+      JSON.stringify(toList),
+      JSON.stringify(ccList),
+      JSON.stringify(bccList),
+      input.replyTo !== undefined ? input.replyTo : existing.reply_to,
+      subject,
+      textBody,
+      htmlBody,
+      now,
+      messageId,
+    )
+    .run();
+
+  if (input.attachmentIds !== undefined) {
+    await syncDraftAttachments(db, r2, messageId, input.attachmentIds);
+  }
+
+  const thread = await db
+    .prepare(`SELECT folder, participants_json FROM threads WHERE id = ?`)
+    .bind(existing.thread_id)
+    .first<{ folder: string; participants_json: string }>();
+
+  if (thread) {
+    const countRow = await db
+      .prepare(`SELECT COUNT(*) AS cnt FROM messages WHERE thread_id = ?`)
+      .bind(existing.thread_id)
+      .first<{ cnt: number }>();
+    const msgCount = Number(countRow?.cnt ?? 0);
+
+    const mergedParticipants = Array.from(
+      new Set([
+        ...safeJsonParse<string[]>(thread.participants_json, []),
+        sender.email,
+        ...toList,
+        ...ccList,
+      ]),
+    );
+
+    if (msgCount <= 1 || thread.folder === "drafts") {
+      await db
+        .prepare(
+          `UPDATE threads
+           SET subject = ?,
+               snippet = ?,
+               participants_json = ?,
+               recipient_address = ?,
+               last_message_at = ?,
+               updated_at = ?
+           WHERE id = ?`,
+        )
+        .bind(
+          subject,
+          snippet,
+          JSON.stringify(mergedParticipants),
+          sender.email,
+          now,
+          now,
+          existing.thread_id,
+        )
+        .run();
+    } else {
+      await db
+        .prepare(
+          `UPDATE threads
+           SET snippet = ?,
+               participants_json = ?,
+               last_message_at = ?,
+               updated_at = ?
+           WHERE id = ?`,
+        )
+        .bind(snippet, JSON.stringify(mergedParticipants), now, now, existing.thread_id)
+        .run();
+    }
+  }
+
+  if (input.mode === "send") {
+    await dispatchMessageViaResend(db, r2, resendClient, messageId);
+  }
+
+  const updated = await getMessageById(db, messageId);
+  if (!updated) {
+    throw new Error("Draft message disappeared after update");
+  }
+  return { message: updated, threadId: existing.thread_id };
+}
+
+/**
+ * Permanently discards a draft (or unsent failed message) along with its R2 attachments,
+ * removing the parent thread if no other messages remain in it.
+ */
+export async function deleteDraftMessage(
+  db: D1Database,
+  r2: R2Bucket,
+  messageId: string,
+): Promise<{ deleted: boolean; threadDeleted: boolean }> {
+  const existing = await db
+    .prepare(`SELECT * FROM messages WHERE id = ?`)
+    .bind(messageId)
+    .first<MessageRow>();
+
+  if (!existing) {
+    return { deleted: false, threadDeleted: false };
+  }
+
+  const isDiscardable =
+    existing.status === "draft" ||
+    (existing.status === "failed" && existing.resend_email_id === null);
+  if (!isDiscardable) {
+    throw new Error("Only draft or unsent failed messages can be discarded");
+  }
+
+  await deleteAttachmentsForMessage(db, r2, messageId);
+  await db.prepare(`DELETE FROM messages WHERE id = ?`).bind(messageId).run();
+
+  const countRow = await db
+    .prepare(`SELECT COUNT(*) AS cnt FROM messages WHERE thread_id = ?`)
+    .bind(existing.thread_id)
+    .first<{ cnt: number }>();
+  const remainingCount = Number(countRow?.cnt ?? 0);
+
+  if (remainingCount === 0) {
+    await db.prepare(`DELETE FROM threads WHERE id = ?`).bind(existing.thread_id).run();
+    return { deleted: true, threadDeleted: true };
+  }
+
+  const latestRemaining = await db
+    .prepare(
+      `SELECT text_body, html_body, created_at FROM messages WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1`,
+    )
+    .bind(existing.thread_id)
+    .first<{ text_body: string; html_body: string; created_at: string }>();
+
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE threads
+       SET message_count = ?,
+           snippet = ?,
+           last_message_at = ?,
+           updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(
+      remainingCount,
+      latestRemaining ? createSnippet(latestRemaining.text_body, latestRemaining.html_body) : "",
+      latestRemaining?.created_at ?? now,
+      now,
+      existing.thread_id,
+    )
+    .run();
+
+  return { deleted: true, threadDeleted: false };
 }
 
 /**

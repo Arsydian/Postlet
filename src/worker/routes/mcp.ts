@@ -330,7 +330,7 @@ export function createMcpRoutes(resendFetchFn?: typeof fetch) {
           capabilities: { tools: {} },
           serverInfo: {
             name: "postlet-mcp",
-            version: c.env.APP_VERSION || "0.1.4",
+            version: c.env.APP_VERSION || "0.2.0",
           },
         },
       });
