@@ -2,6 +2,29 @@
 
 Self-hosted, single-owner email client and AI-agent mail gateway running on **Cloudflare Workers** and **Resend** — designed to deploy directly from a synced GitHub repository and run comfortably inside Cloudflare's Free Tier.
 
+## Screenshots
+
+### 3-Pane Mailbox — Light & Dark Modes
+
+![Postlet Light Mode Inbox](docs/screenshots/inbox-light.png)
+
+![Postlet Dark Mode Inbox](docs/screenshots/inbox-dark.png)
+
+### Rich Text Composer & Cloudflare AI Settings
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/composer-light.png" alt="Postlet Rich Text Composer with Resend open and link tracking switch" />
+      <p align="center"><em>Rich Text, Markdown &amp; Plain Text Composer with Resend Tracking Toggle</em></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/settings-dark.png" alt="Postlet Settings in Dark Mode with Cloudflare Workers AI controls" />
+      <p align="center"><em>Settings &amp; Built-In Cloudflare Workers AI Controls (Dark Mode)</em></p>
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 - **Full-Featured Web Inbox** (`/`): Tactile Soft UI responsive 3-pane interface with automatic OS color-scheme detection + persistent Light / Dark / System theme toggle, folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Rich Text (Bold, Italic, Underline, Strikethrough, Code, Headings, Lists, Blockquotes, Links), Markdown, and Plain Text composer, saved draft editing/discarding, Reply / Reply All / Forward, optional Resend open & link tracking switch, and live delivery + engagement status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`, `email.opened`, `email.clicked`).
