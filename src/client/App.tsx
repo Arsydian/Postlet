@@ -383,7 +383,7 @@ export default function App() {
 
   if (!meta) {
     return (
-      <div className="neu-canvas flex h-screen items-center justify-center p-6">
+      <div className="neu-canvas postlet-app-shell items-center justify-center p-6">
         <div className="neu-card flex items-center gap-3 rounded-3xl px-6 py-4">
           <div className="neu-btn-accent flex h-9 w-9 items-center justify-center rounded-2xl text-sm font-bold">
             P
@@ -404,7 +404,7 @@ export default function App() {
   ]).size;
 
   return (
-    <div className="neu-canvas flex h-screen w-screen overflow-hidden">
+    <div className="neu-canvas postlet-app-shell">
       <Sidebar
         appVersion={meta.appVersion}
         ownerEmail={meta.ownerEmail}
@@ -450,12 +450,11 @@ export default function App() {
 
       <main className="flex min-w-0 flex-1 overflow-hidden">
         {activeSection === "mail" && (
-          <>
-            <div
-              className={`${
-                selectedThread ? "hidden md:flex" : "flex"
-              } h-full w-full md:w-auto`}
-            >
+          <div
+            className="postlet-mail-workspace"
+            data-has-selection={selectedThread ? "true" : "false"}
+          >
+            <div className="postlet-pane-list">
               <ThreadList
                 folder={activeFolder}
                 selectedDomain={selectedDomain}
@@ -476,7 +475,7 @@ export default function App() {
               />
             </div>
 
-            <div className={`${selectedThread ? "flex" : "hidden md:flex"} flex-1 h-full min-w-0`}>
+            <div className="postlet-pane-detail">
               <ThreadView
                 thread={selectedThread}
                 settings={meta.settings}
@@ -506,7 +505,7 @@ export default function App() {
                 }}
               />
             </div>
-          </>
+          </div>
         )}
 
         {activeSection === "digests" && (

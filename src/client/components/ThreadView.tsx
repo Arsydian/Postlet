@@ -161,7 +161,7 @@ function SanitizedEmailFrame({
           sandbox="allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
           srcDoc={srcDoc}
-          className="h-[380px] min-h-[180px] max-h-[1200px] w-full resize-y rounded-xl border border-[var(--neu-border)] bg-[var(--neu-inset)]"
+          className="postlet-email-frame w-full resize-y rounded-xl border border-[var(--neu-border)] bg-[var(--neu-inset)]"
         />
       ) : (
         <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--neu-text)]">
@@ -196,7 +196,7 @@ export function ThreadView({
 }: ThreadViewProps) {
   if (!thread) {
     return (
-      <div className="neu-canvas hidden flex-1 flex-col items-center justify-center p-8 text-center md:flex">
+      <div className="neu-canvas flex flex-1 flex-col items-center justify-center p-8 text-center">
         <div className="neu-card max-w-sm rounded-3xl p-8">
           <div className="neu-inset mx-auto flex h-14 w-14 items-center justify-center rounded-full text-[var(--neu-coral-text)]">
             <Inbox className="h-6 w-6" aria-hidden="true" />
@@ -227,7 +227,7 @@ export function ThreadView({
           <button
             type="button"
             onClick={onBackMobile}
-            className="neu-icon-btn h-8 w-8 md:hidden"
+            className="neu-icon-btn postlet-back-btn h-8 w-8 shrink-0"
             aria-label="Back to thread list"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -303,7 +303,7 @@ export function ThreadView({
       </header>
 
       {/* Scrollable Body */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 lg:p-6">
+      <div className="postlet-scroll-region postlet-thread-scroll flex-1 space-y-4 overflow-y-auto">
         {/* Built-in Cloudflare Workers AI Summary Card */}
         <div className="neu-card rounded-2xl p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -398,7 +398,7 @@ export function ThreadView({
           return (
             <article
               key={msg.id}
-              className={`neu-card rounded-2xl p-5 ${
+              className={`neu-card postlet-message-card rounded-2xl ${
                 isDraft ? "border-[var(--neu-coral-soft-border)]" : ""
               }`}
             >
@@ -447,7 +447,7 @@ export function ThreadView({
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--neu-divider)] pb-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-[var(--neu-text)]">
+                    <span className="break-words text-sm font-semibold text-[var(--neu-text)]">
                       {msg.fromName ? `${msg.fromName} <${msg.fromAddress}>` : msg.fromAddress}
                     </span>
                     <span
@@ -468,7 +468,7 @@ export function ThreadView({
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-[var(--neu-text-muted)]">
+                  <p className="mt-1 break-words text-xs text-[var(--neu-text-muted)]">
                     To: {msg.toAddresses.join(", ")}
                     {msg.ccAddresses.length > 0 ? ` · Cc: ${msg.ccAddresses.join(", ")}` : ""}
                   </p>

@@ -15,4 +15,7 @@ export default defineConfig({
     tailwindcss(),
     cloudflare(),
   ],
+  build: {
+    cssTarget: ["safari15.4", "ios15.4", "chrome108", "firefox101"],
+  },
 });

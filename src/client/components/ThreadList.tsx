@@ -93,17 +93,17 @@ export function ThreadList({
 }: ThreadListProps) {
   return (
     <section
-      className="neu-panel flex h-full w-full shrink-0 flex-col border-r border-[var(--neu-divider)] md:w-88 lg:w-96"
+      className="neu-panel postlet-thread-list-pane flex h-full shrink-0 flex-col border-r border-[var(--neu-divider)]"
       aria-label="Conversation threads"
     >
       {/* Header + Debossed Search Well */}
       <div className="border-b border-[var(--neu-divider)] px-4 py-3.5">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             <button
               type="button"
               onClick={onOpenMobileNav}
-              className="neu-icon-btn h-8 w-8 lg:hidden"
+              className="neu-icon-btn postlet-mobile-nav-trigger h-8 w-8 shrink-0"
               aria-label="Open menu"
             >
               <Menu className="h-4 w-4" />
@@ -176,7 +176,7 @@ export function ThreadList({
       </div>
 
       {/* Tactile Thread Cards */}
-      <div className="flex-1 space-y-2.5 overflow-y-auto p-3">
+      <div className="postlet-scroll-region flex-1 space-y-2.5 overflow-y-auto p-3">
         {threads.length === 0 && !loading ? (
           <div className="neu-card flex h-56 flex-col items-center justify-center rounded-2xl px-6 text-center">
             <p className="text-sm font-semibold text-[var(--neu-text)]">No conversations here</p>

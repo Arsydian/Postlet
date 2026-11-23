@@ -694,6 +694,7 @@ dialog::backdrop {
 
   /* Circular extruded tactile icon control */
   .neu-icon-btn {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1045,6 +1046,197 @@ dialog::backdrop {
   .neu-coral-dot {
     background-color: var(--neu-coral-glow);
     box-shadow: 0 0 8px var(--neu-coral-halo);
+  }
+
+  /*
+   * Responsive 3-panel shell layout across phones, portrait tablets, and landscape tablets / iPads.
+   * Uses dynamic viewport height (100dvh), safe-area insets, contain overscroll, and container
+   * queries so Sidebar + ThreadList + ThreadView render cleanly side-by-side in tablet landscape.
+   */
+  .postlet-app-shell {
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .postlet-scroll-region {
+    overscroll-behavior: contain;
+  }
+
+  .postlet-sidebar-dock {
+    display: none;
+  }
+
+  .postlet-sidebar-drawer {
+    display: flex;
+  }
+
+  .postlet-sidebar-aside {
+    width: 16rem;
+    max-width: 85vw;
+    container: sidebar / inline-size;
+  }
+
+  .postlet-sidebar-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .postlet-sidebar-nav {
+    padding-inline: 0.75rem;
+  }
+
+  .postlet-mobile-nav-trigger {
+    display: inline-flex;
+  }
+
+  .postlet-mail-workspace {
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .postlet-pane-list {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+  }
+
+  .postlet-pane-detail {
+    display: flex;
+    flex: 1 1 0%;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    container: thread-pane / inline-size;
+  }
+
+  .postlet-mail-workspace[data-has-selection="true"] .postlet-pane-list {
+    display: none;
+  }
+
+  .postlet-mail-workspace[data-has-selection="false"] .postlet-pane-detail {
+    display: none;
+  }
+
+  .postlet-thread-list-pane {
+    width: 100%;
+  }
+
+  .postlet-back-btn {
+    display: inline-flex;
+  }
+
+  .postlet-thread-scroll {
+    padding: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .postlet-thread-scroll {
+      padding: 1.5rem;
+    }
+  }
+
+  .postlet-message-card {
+    padding: 1.25rem;
+  }
+
+  .postlet-email-frame {
+    height: clamp(260px, 48dvh, 420px);
+    min-height: 180px;
+    max-height: 1200px;
+  }
+
+  /* 2-panel mode: tablet portrait & wide phone landscape */
+  @media (min-width: 700px) {
+    .postlet-mail-workspace[data-has-selection="true"] .postlet-pane-list {
+      display: flex;
+    }
+
+    .postlet-mail-workspace[data-has-selection="false"] .postlet-pane-detail {
+      display: flex;
+    }
+
+    .postlet-pane-list {
+      flex: 0 0 auto;
+      width: auto;
+    }
+
+    .postlet-thread-list-pane {
+      width: clamp(264px, 37vw, 344px);
+    }
+
+    .postlet-back-btn {
+      display: none;
+    }
+  }
+
+  /* 3-panel mode: desktop and tablets / iPads in landscape (including Safari sidebar / Split View) */
+  @media (min-width: 960px),
+    (min-width: 768px) and (min-height: 480px) and (orientation: landscape) {
+    .postlet-sidebar-dock {
+      display: block;
+      flex: 0 0 auto;
+      height: 100%;
+    }
+
+    .postlet-sidebar-dock .postlet-sidebar-aside {
+      width: clamp(184px, 21vw, 256px);
+      max-width: none;
+    }
+
+    .postlet-sidebar-drawer {
+      display: none;
+    }
+
+    .postlet-mobile-nav-trigger {
+      display: none;
+    }
+
+    .postlet-thread-list-pane {
+      width: clamp(240px, 29vw, 384px);
+    }
+  }
+
+  @container sidebar (max-width: 224px) {
+    .postlet-sidebar-header {
+      padding-inline: 0.75rem;
+    }
+
+    .postlet-sidebar-nav {
+      padding-inline: 0.5rem;
+    }
+
+    .postlet-theme-auto-badge {
+      display: none;
+    }
+  }
+
+  @container thread-pane (max-width: 520px) {
+    .postlet-thread-scroll {
+      padding: 0.875rem;
+    }
+
+    .postlet-message-card {
+      padding: 1rem;
+    }
+  }
+
+  /* Expand compact 32px icon buttons to >= 44px hit targets on coarse touch screens (iPad/tablets) */
+  @media (pointer: coarse) {
+    .neu-icon-btn::after {
+      content: "";
+      position: absolute;
+      inset: -6px;
+    }
   }
 }
 

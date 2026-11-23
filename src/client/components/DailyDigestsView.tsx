@@ -82,7 +82,7 @@ export function DailyDigestsView({
           <button
             type="button"
             onClick={onOpenMobileNav}
-            className="neu-icon-btn h-8 w-8 lg:hidden"
+            className="neu-icon-btn postlet-mobile-nav-trigger h-8 w-8"
             aria-label="Open menu"
           >
             <Menu className="h-4 w-4" />
@@ -123,7 +123,7 @@ export function DailyDigestsView({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Digest history sidebar */}
-        <aside className="neu-panel hidden w-60 shrink-0 overflow-y-auto border-r border-[var(--neu-divider)] p-3 sm:block">
+        <aside className="neu-panel postlet-scroll-region hidden w-60 shrink-0 overflow-y-auto border-r border-[var(--neu-divider)] p-3 sm:block">
           <p className="mb-2.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--neu-text-muted)]">
             History
           </p>
@@ -159,7 +159,7 @@ export function DailyDigestsView({
         </aside>
 
         {/* Active Digest Body */}
-        <div className="flex-1 overflow-y-auto p-5 lg:p-7">
+        <div className="postlet-scroll-region flex-1 overflow-y-auto p-5 lg:p-7">
           {!active ? (
             <div className="neu-card mx-auto max-w-lg rounded-3xl p-8 text-center">
               <div className="neu-inset mx-auto flex h-14 w-14 items-center justify-center rounded-full text-[var(--neu-coral-text)]">

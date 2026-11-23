@@ -1,4 +1,4 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.5.0-E05337)
+# Postlet ![Version](https://img.shields.io/badge/version-0.5.1-E05337)
 
 Self-hosted, modular multi-domain email client and AI-agent mail gateway running on **Cloudflare Workers** — pairing **free unlimited inbound** via Cloudflare Email Routing with pluggable outbound transports (**Resend**, **Cloudflare Email Sending**, or **Amazon SES v2**), designed to deploy directly from GitHub and run comfortably inside Cloudflare's Free Tier for personal mailbots or scale cleanly on Paid plans for transactional workloads.
 

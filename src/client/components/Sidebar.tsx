@@ -112,18 +112,18 @@ export function Sidebar({
     selectedDomain === null && selectedAddress === null && activeSection === "mail";
 
   const content = (
-    <aside className="neu-panel flex h-full w-64 flex-col border-r border-[var(--neu-divider)]">
+    <aside className="neu-panel postlet-sidebar-aside flex h-full flex-col border-r border-[var(--neu-divider)]">
       {/* Brand header */}
-      <div className="flex items-center justify-between border-b border-[var(--neu-divider)] px-4 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="neu-card relative flex h-9 w-9 items-center justify-center rounded-2xl text-sm font-bold text-[var(--neu-text)]">
+      <div className="postlet-sidebar-header flex items-center justify-between gap-2 border-b border-[var(--neu-divider)]">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="neu-card relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-sm font-bold text-[var(--neu-text)]">
             P
             <span
               className="neu-coral-dot absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
               aria-hidden="true"
             />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="text-base font-semibold tracking-tight text-[var(--neu-text)]">
                 Postlet
@@ -133,7 +133,7 @@ export function Sidebar({
               </span>
             </div>
             <p
-              className="max-w-[140px] truncate text-[11px] text-[var(--neu-text-muted)]"
+              className="truncate text-[11px] text-[var(--neu-text-muted)]"
               title={ownerEmail}
             >
               {ownerEmail}
@@ -143,7 +143,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onCloseMobile}
-          className="neu-icon-btn h-8 w-8 lg:hidden"
+          className="neu-icon-btn postlet-mobile-nav-trigger h-8 w-8 shrink-0"
           aria-label="Close navigation menu"
         >
           <X className="h-4 w-4" />
@@ -166,7 +166,10 @@ export function Sidebar({
       </div>
 
       {/* Main folders + Digests + Multi-Domain Mailboxes */}
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4" aria-label="Mailbox navigation">
+      <nav
+        className="postlet-scroll-region postlet-sidebar-nav flex-1 space-y-5 overflow-y-auto pb-4"
+        aria-label="Mailbox navigation"
+      >
         <div className="space-y-1">
           {FOLDER_ITEMS.map(({ id, label, icon: Icon }) => {
             const active = activeSection === "mail" && activeFolder === id;
@@ -181,20 +184,20 @@ export function Sidebar({
                   onSelectFolder(id);
                   onCloseMobile();
                 }}
-                className="neu-nav-item flex w-full items-center justify-between rounded-2xl py-2 pl-4 pr-3 text-sm font-medium"
+                className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-2xl py-2 pl-4 pr-3 text-sm font-medium"
               >
-                <span className="flex items-center gap-2.5">
+                <span className="flex min-w-0 items-center gap-2.5">
                   <Icon
                     className={`h-4 w-4 shrink-0 ${
                       active ? "text-[var(--neu-coral-text)]" : ""
                     }`}
                     aria-hidden="true"
                   />
-                  <span>{label}</span>
+                  <span className="truncate">{label}</span>
                 </span>
                 {badge && (
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
                       badge.amber
                         ? "neu-badge-warning"
                         : active
@@ -223,16 +226,16 @@ export function Sidebar({
               onSelectSection("digests");
               onCloseMobile();
             }}
-            className="neu-nav-item flex w-full items-center justify-between rounded-2xl py-2 pl-4 pr-3 text-sm font-medium"
+            className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-2xl py-2 pl-4 pr-3 text-sm font-medium"
           >
-            <span className="flex items-center gap-2.5">
+            <span className="flex min-w-0 items-center gap-2.5">
               <Sparkles
                 className={`h-4 w-4 shrink-0 ${
                   activeSection === "digests" ? "text-[var(--neu-coral-text)]" : ""
                 }`}
                 aria-hidden="true"
               />
-              <span>Daily Digests</span>
+              <span className="truncate">Daily Digests</span>
             </span>
           </button>
 
@@ -242,14 +245,14 @@ export function Sidebar({
               onSelectSection("settings", "ai");
               onCloseMobile();
             }}
-            className="neu-nav-item flex w-full items-center justify-between rounded-2xl py-2 pl-4 pr-3 text-sm font-medium"
+            className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-2xl py-2 pl-4 pr-3 text-sm font-medium"
           >
-            <span className="flex items-center gap-2.5">
+            <span className="flex min-w-0 items-center gap-2.5">
               <Bot className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>Cloudflare AI</span>
+              <span className="truncate">Cloudflare AI</span>
             </span>
             <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                 settings.aiEnabled ? "neu-badge-success" : "neu-badge"
               }`}
             >
@@ -383,7 +386,7 @@ export function Sidebar({
                 <span>Dark Mode</span>
               </span>
               {themePreference === "system" && (
-                <span className="neu-badge rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                <span className="neu-badge postlet-theme-auto-badge rounded-full px-1.5 py-0.5 text-[10px] font-medium">
                   Auto
                 </span>
               )}
@@ -416,7 +419,7 @@ export function Sidebar({
             }`}
             aria-hidden="true"
           />
-          <span>Settings &amp; Agent API</span>
+          <span className="truncate">Settings &amp; Agent API</span>
         </button>
       </div>
     </aside>
@@ -424,9 +427,9 @@ export function Sidebar({
 
   return (
     <>
-      <div className="hidden h-full lg:block">{content}</div>
+      <div className="postlet-sidebar-dock h-full">{content}</div>
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 flex lg:hidden">
+        <div className="postlet-sidebar-drawer fixed inset-0 z-40">
           <div
             className="fixed inset-0 backdrop-blur-xs"
             style={{ backgroundColor: "var(--neu-backdrop)" }}

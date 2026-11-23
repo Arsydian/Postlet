@@ -61,7 +61,7 @@ export function SettingsView({
             <button
               type="button"
               onClick={onOpenMobileNav}
-              className="neu-icon-btn h-8 w-8 lg:hidden"
+              className="neu-icon-btn postlet-mobile-nav-trigger h-8 w-8"
               aria-label="Open menu"
             >
               <Menu className="h-4 w-4" />
@@ -142,7 +142,7 @@ export function SettingsView({
         </nav>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 lg:p-7">
+      <div className="postlet-scroll-region flex-1 overflow-y-auto p-5 lg:p-7">
         <div className="mx-auto max-w-4xl">
           {activeTab === "addresses" && (
             <AddressesTab
