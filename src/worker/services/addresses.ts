@@ -222,11 +222,43 @@ export async function deleteAddress(db: D1Database, id: string): Promise<boolean
 }
 
 /**
+ * Parses a comma- or whitespace-separated domain string into a deduplicated, normalized array
+ * of lowercase domain names (stripping any leading `@`).
+ */
+export function parseDomainList(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const token of raw.split(/[\s,;]+/)) {
+    const cleaned = token.trim().replace(/^@+/, "").toLowerCase();
+    if (!cleaned || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(cleaned) || seen.has(cleaned)) {
+      continue;
+    }
+    seen.add(cleaned);
+    out.push(cleaned);
+  }
+  return out;
+}
+
+function normalizeDomainArray(domains: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of domains) {
+    for (const d of parseDomainList(raw)) {
+      if (!seen.has(d)) {
+        seen.add(d);
+        out.push(d);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Loads all operational & Cloudflare AI settings from D1, applying safe defaults if any key is absent.
  * Note: `aiEnabled` defaults strictly to `false`.
  *
  * @param db D1 database binding.
- * @param envMailDomain Optional fallback domain from environment `MAIL_DOMAIN`.
+ * @param envMailDomain Optional fallback domain(s) from environment `MAIL_DOMAIN`.
  * @param defaultAiModel Optional fallback model from `DEFAULT_AI_MODEL`.
  * @returns Parsed AppSettings object.
  */
@@ -264,8 +296,30 @@ export async function getSettings(
   const storedMode = map.get("ai_important_auto_reply_mode");
   const mode: AutoReplyMode = storedMode === "auto_send" ? "auto_send" : "approval";
 
+  let mailDomains: string[] = [];
+  const rawJsonDomains = map.get("mail_domains");
+  if (rawJsonDomains !== undefined) {
+    try {
+      const parsed = JSON.parse(rawJsonDomains) as unknown;
+      if (Array.isArray(parsed)) {
+        mailDomains = normalizeDomainArray(parsed.filter((d): d is string => typeof d === "string"));
+      }
+    } catch {
+      mailDomains = [];
+    }
+  } else {
+    const fallbackRaw = map.get("mail_domain") ?? envMailDomain ?? "";
+    mailDomains = parseDomainList(fallbackRaw);
+  }
+
+  const primaryDomain = mailDomains[0] ?? (map.get("mail_domain") || envMailDomain || "").trim().toLowerCase();
+  if (mailDomains.length === 0 && primaryDomain) {
+    mailDomains = parseDomainList(primaryDomain);
+  }
+
   return {
-    mailDomain: (map.get("mail_domain") || envMailDomain || "").trim().toLowerCase(),
+    mailDomain: mailDomains[0] ?? primaryDomain,
+    mailDomains,
     catchAllEnabled: bool("catch_all_enabled", true),
     aiEnabled: bool("ai_enabled", false),
     aiModel: map.get("ai_model") || defaultAiModel,
@@ -304,7 +358,15 @@ export async function updateSettings(
   envMailDomain = "",
 ): Promise<AppSettings> {
   const entries: Array<[string, string]> = [];
-  if (patch.mailDomain !== undefined) entries.push(["mail_domain", patch.mailDomain]);
+  if (patch.mailDomains !== undefined) {
+    const normalized = normalizeDomainArray(patch.mailDomains);
+    entries.push(["mail_domains", JSON.stringify(normalized)]);
+    entries.push(["mail_domain", normalized[0] ?? ""]);
+  } else if (patch.mailDomain !== undefined) {
+    const normalized = parseDomainList(patch.mailDomain);
+    entries.push(["mail_domains", JSON.stringify(normalized)]);
+    entries.push(["mail_domain", normalized[0] ?? patch.mailDomain.trim().toLowerCase()]);
+  }
   if (patch.catchAllEnabled !== undefined)
     entries.push(["catch_all_enabled", String(patch.catchAllEnabled)]);
   if (patch.aiEnabled !== undefined) entries.push(["ai_enabled", String(patch.aiEnabled)]);

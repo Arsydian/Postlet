@@ -175,8 +175,16 @@ export const createAgentKeySchema = z.object({
   rateLimitPerHour: z.number().int().min(1).max(5000).optional().default(60),
 });
 
+/** Validates a DNS domain name cleanly and normalizes case/whitespace. */
+export const domainNameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, "Invalid domain format");
+
 export const updateSettingsSchema = z.object({
-  mailDomain: z.string().trim().toLowerCase().max(255).optional(),
+  mailDomain: z.string().trim().toLowerCase().max(500).optional(),
+  mailDomains: z.array(domainNameSchema).max(30).optional(),
   catchAllEnabled: z.boolean().optional(),
   aiEnabled: z.boolean().optional(),
   aiModel: z.enum(ALLOWED_AI_MODELS).optional(),

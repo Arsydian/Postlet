@@ -9,7 +9,9 @@ import type { FolderName, MessageStatus, ThreadSummary } from "../../shared/type
 
 interface ThreadListProps {
   folder: FolderName;
+  selectedDomain: string | null;
   selectedAddress: string | null;
+  showDomainPill?: boolean;
   threads: ThreadSummary[];
   selectedThreadId: string | null;
   loading: boolean;
@@ -73,7 +75,9 @@ function StatusBadge({ status, hasPending }: { status: MessageStatus | null; has
 
 export function ThreadList({
   folder,
+  selectedDomain,
   selectedAddress,
+  showDomainPill = false,
   threads,
   selectedThreadId,
   loading,
@@ -108,9 +112,9 @@ export function ThreadList({
               <h1 className="text-base font-semibold text-[var(--neu-text)]">
                 {FOLDER_TITLES[folder]}
               </h1>
-              {selectedAddress && (
+              {(selectedAddress || selectedDomain) && (
                 <p className="text-[11px] font-semibold text-[var(--neu-coral-text)]">
-                  {selectedAddress}
+                  {selectedAddress || `*@${selectedDomain}`}
                 </p>
               )}
             </div>
@@ -257,6 +261,11 @@ export function ThreadList({
                   {thread.aiCategory && (
                     <span className="neu-badge-coral rounded-full px-2 py-0.5 text-[10px] font-medium">
                       {thread.aiCategory.replace("_", " ")}
+                    </span>
+                  )}
+                  {showDomainPill && thread.recipientAddress.includes("@") && (
+                    <span className="neu-badge rounded-full px-2 py-0.5 text-[10px] font-medium">
+                      {thread.recipientAddress.split("@")[1]}
                     </span>
                   )}
                 </div>

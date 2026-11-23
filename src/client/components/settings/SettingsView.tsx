@@ -6,7 +6,7 @@
  */
 
 import { AtSign, Bot, ClipboardList, KeyRound, Menu, Monitor, Moon, Sun } from "lucide-react";
-import type { AddressRecord, AppSettings } from "../../../shared/types";
+import type { AddressRecord, AppSettings, MailProviderId } from "../../../shared/types";
 import type { ResolvedTheme, ThemePreference } from "../../lib/theme";
 import { AddressesTab } from "./AddressesTab";
 import { AgentKeysTab } from "./AgentKeysTab";
@@ -19,6 +19,8 @@ interface SettingsViewProps {
   activeTab: SettingsTabId;
   settings: AppSettings;
   addresses: AddressRecord[];
+  mailProvider: MailProviderId;
+  selfHostedTrackingEnabled: boolean;
   themePreference: ThemePreference;
   systemTheme: ResolvedTheme;
   onSelectThemePreference: (pref: ThemePreference) => void;
@@ -40,6 +42,8 @@ export function SettingsView({
   activeTab,
   settings,
   addresses,
+  mailProvider,
+  selfHostedTrackingEnabled,
   themePreference,
   systemTheme,
   onSelectThemePreference,
@@ -144,6 +148,8 @@ export function SettingsView({
             <AddressesTab
               settings={settings}
               addresses={addresses}
+              mailProvider={mailProvider}
+              selfHostedTrackingEnabled={selfHostedTrackingEnabled}
               onRefresh={onRefreshMeta}
               onSuccess={onSuccess}
               onError={onError}

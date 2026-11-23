@@ -30,6 +30,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<ActiveSection>("mail");
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>("addresses");
   const [activeFolder, setActiveFolder] = useState<FolderName>("inbox");
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -84,6 +85,7 @@ export default function App() {
         const res = await api.listThreads({
           folder: activeFolder,
           address: selectedAddress || undefined,
+          domain: selectedDomain || undefined,
           unread: filterChip === "unread" ? true : undefined,
           priority: filterChip === "high" ? "high" : undefined,
           category: filterChip === "action_required" ? "action_required" : undefined,
@@ -99,7 +101,7 @@ export default function App() {
         setThreadsLoading(false);
       }
     },
-    [activeFolder, selectedAddress, filterChip, debouncedQuery, showToast],
+    [activeFolder, selectedAddress, selectedDomain, filterChip, debouncedQuery, showToast],
   );
 
   useEffect(() => {
@@ -243,8 +245,17 @@ export default function App() {
   }
 
   function openNewCompose() {
+    let preferredFrom = selectedAddress || undefined;
+    if (!preferredFrom && selectedDomain) {
+      const match = meta?.addresses.find(
+        (a) => a.isActive && a.email.toLowerCase().endsWith(`@${selectedDomain.toLowerCase()}`),
+      );
+      preferredFrom = match?.email;
+    }
+
     setComposerInitial({
       mode: "new",
+      fromAddress: preferredFrom,
       to: "",
       cc: "",
       bcc: "",
@@ -386,6 +397,12 @@ export default function App() {
     );
   }
 
+  const distinctDomainsCount = new Set<string>([
+    ...meta.settings.mailDomains,
+    ...meta.addresses.map((a) => a.email.split("@")[1]?.toLowerCase() ?? "").filter(Boolean),
+    ...Object.keys(meta.domainUnreadCounts),
+  ]).size;
+
   return (
     <div className="neu-canvas flex h-screen w-screen overflow-hidden">
       <Sidebar
@@ -393,8 +410,10 @@ export default function App() {
         ownerEmail={meta.ownerEmail}
         activeSection={activeSection}
         activeFolder={activeFolder}
+        selectedDomain={selectedDomain}
         selectedAddress={selectedAddress}
         counts={meta.counts}
+        domainUnreadCounts={meta.domainUnreadCounts}
         addresses={meta.addresses}
         settings={meta.settings}
         mobileOpen={mobileNavOpen}
@@ -409,9 +428,17 @@ export default function App() {
           setSelectedThreadId(null);
           setSelectedThread(null);
         }}
+        onSelectDomain={(domain) => {
+          setActiveSection("mail");
+          setSelectedDomain(domain);
+          setSelectedAddress(null);
+          setSelectedThreadId(null);
+          setSelectedThread(null);
+        }}
         onSelectAddress={(addr) => {
           setActiveSection("mail");
           setSelectedAddress(addr);
+          setSelectedDomain(null);
           setSelectedThreadId(null);
           setSelectedThread(null);
         }}
@@ -431,7 +458,9 @@ export default function App() {
             >
               <ThreadList
                 folder={activeFolder}
+                selectedDomain={selectedDomain}
                 selectedAddress={selectedAddress}
+                showDomainPill={!selectedDomain && !selectedAddress && distinctDomainsCount > 1}
                 threads={threads}
                 selectedThreadId={selectedThreadId}
                 loading={threadsLoading}
@@ -499,6 +528,8 @@ export default function App() {
             activeTab={settingsTab}
             settings={meta.settings}
             addresses={meta.addresses}
+            mailProvider={meta.mailProvider}
+            selfHostedTrackingEnabled={meta.selfHostedTrackingEnabled}
             themePreference={theme.preference}
             systemTheme={theme.systemTheme}
             onSelectThemePreference={theme.setPreference}
@@ -516,6 +547,8 @@ export default function App() {
         initial={composerInitial}
         addresses={meta.addresses}
         settings={meta.settings}
+        mailProvider={meta.mailProvider}
+        selfHostedTrackingEnabled={meta.selfHostedTrackingEnabled}
         resolvedTheme={theme.resolvedTheme}
         onClose={() => setComposerOpen(false)}
         onDiscardDraft={handleDiscardDraft}

@@ -55,6 +55,7 @@ import {
   approvePendingMessage,
   deleteDraftMessage,
   deleteThreadPermanently,
+  getDomainUnreadCounts,
   getFolderCounts,
   getThreadDetail,
   listThreads,
@@ -63,7 +64,11 @@ import {
   updateDraftMessage,
   updateThread,
 } from "../services/mail";
-import { ResendClient } from "../services/resend";
+import {
+  getSelfHostedTrackingConfig,
+  isSelfHostedTrackingConfigured,
+} from "../services/tracking";
+import { createMailTransport, resolveMailProvider } from "../services/transports";
 
 async function parseOptionalJsonBody(
   c: { req: { text: () => Promise<string> } },
@@ -88,8 +93,9 @@ export function createAdminRoutes(options?: {
   router.use("/*", createAdminCsrfMiddleware());
 
   router.get("/meta", async (c) => {
-    const [counts, settings, addresses, latestDigest] = await Promise.all([
+    const [counts, domainUnreadCounts, settings, addresses, latestDigest] = await Promise.all([
       getFolderCounts(c.env.DB),
+      getDomainUnreadCounts(c.env.DB),
       getSettings(c.env.DB, c.env.MAIL_DOMAIN ?? "", c.env.DEFAULT_AI_MODEL),
       listAddresses(c.env.DB),
       getLatestDailyDigest(c.env.DB),
@@ -97,9 +103,12 @@ export function createAdminRoutes(options?: {
 
     return c.json({
       appName: c.env.APP_NAME || "Postlet",
-      appVersion: c.env.APP_VERSION || "0.4.0",
+      appVersion: c.env.APP_VERSION || "0.5.0",
       ownerEmail: c.get("ownerEmail") ?? "owner",
+      mailProvider: resolveMailProvider(c.env),
+      selfHostedTrackingEnabled: isSelfHostedTrackingConfigured(c.env),
       counts,
+      domainUnreadCounts,
       settings,
       addresses,
       latestDigestDate: latestDigest?.digestDate ?? null,
@@ -120,6 +129,7 @@ export function createAdminRoutes(options?: {
     const threads = await listThreads(c.env.DB, {
       folder: parsedFolder?.data,
       address: c.req.query("address") || undefined,
+      domain: c.req.query("domain") || undefined,
       unreadOnly: c.req.query("unread") === "true",
       priority: (c.req.query("priority") || undefined) as AiPriority | undefined,
       category: (c.req.query("category") || undefined) as AiCategory | undefined,
@@ -169,14 +179,16 @@ export function createAdminRoutes(options?: {
       return c.json({ error: "Validation failed", issues: parsed.error.flatten() }, 400);
     }
 
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", options?.resendFetchFn);
+    const transport = createMailTransport(c.env, options?.resendFetchFn);
+    const trackingConfig = getSelfHostedTrackingConfig(c.env);
     try {
       const result = await sendOrDraftEmail(
         c.env.DB,
         c.env.ATTACHMENTS,
-        resendClient,
+        transport,
         parsed.data,
         { actorLabel: c.get("ownerEmail") ?? "owner" },
+        trackingConfig,
       );
       return c.json(result, parsed.data.mode === "send" ? 200 : 201);
     } catch (err) {
@@ -195,14 +207,16 @@ export function createAdminRoutes(options?: {
       return c.json({ error: "Validation failed", issues: parsed.error.flatten() }, 400);
     }
 
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", options?.resendFetchFn);
+    const transport = createMailTransport(c.env, options?.resendFetchFn);
+    const trackingConfig = getSelfHostedTrackingConfig(c.env);
     try {
       const message = await approvePendingMessage(
         c.env.DB,
         c.env.ATTACHMENTS,
-        resendClient,
+        transport,
         c.req.param("id"),
         parsed.data,
+        trackingConfig,
       );
       await recordAuditLog(c.env.DB, {
         actorType: "owner",
@@ -244,14 +258,16 @@ export function createAdminRoutes(options?: {
     }
 
     const messageId = c.req.param("id");
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", options?.resendFetchFn);
+    const transport = createMailTransport(c.env, options?.resendFetchFn);
+    const trackingConfig = getSelfHostedTrackingConfig(c.env);
     try {
       const result = await updateDraftMessage(
         c.env.DB,
         c.env.ATTACHMENTS,
-        resendClient,
+        transport,
         messageId,
         parsed.data,
+        trackingConfig,
       );
       await recordAuditLog(c.env.DB, {
         actorType: "owner",
@@ -449,13 +465,14 @@ export function createAdminRoutes(options?: {
     if (!parsed.success) {
       return c.json({ error: "Validation failed", issues: parsed.error.flatten() }, 400);
     }
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", options?.resendFetchFn);
+    const transport = createMailTransport(c.env, options?.resendFetchFn);
+    const trackingConfig = getSelfHostedTrackingConfig(c.env);
     try {
       const res = await evaluateAndRunImportantAutoReply(
         c.env.DB,
         c.env.ATTACHMENTS,
         c.env,
-        resendClient,
+        transport,
         c.req.param("id"),
         {
           callerType: "owner",
@@ -464,6 +481,7 @@ export function createAdminRoutes(options?: {
           instructionsOverride: parsed.data.instructionsOverride,
           force: parsed.data.force,
         },
+        trackingConfig,
       );
       return c.json(res);
     } catch (err) {
@@ -481,9 +499,9 @@ export function createAdminRoutes(options?: {
     if (!bodyRes.ok) {
       return c.json({ error: "Malformed JSON request body" }, 400);
     }
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", options?.resendFetchFn);
+    const transport = createMailTransport(c.env, options?.resendFetchFn);
     try {
-      const digest = await generateDailyInboxSummary(c.env.DB, c.env, resendClient, {
+      const digest = await generateDailyInboxSummary(c.env.DB, c.env, transport, {
         triggeredBy: "owner",
         actorType: "postlet_ai",
         actorLabel: "postlet-ai",

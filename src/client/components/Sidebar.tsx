@@ -1,8 +1,8 @@
 /**
  * @file src/client/components/Sidebar.tsx
  * @description Tactile Soft UI left navigation rail for Postlet: sculpted brand header, glowing
- * coral Compose CTA, mail folders with counts, Daily Digests, address filters, Dark Mode switch,
- * and Settings navigation.
+ * coral Compose CTA, mail folders with counts, Daily Digests, unified & per-domain mailbox
+ * scoping, Dark Mode switch, and Settings navigation.
  */
 
 import {
@@ -11,6 +11,7 @@ import {
   Bot,
   Clock,
   FileText,
+  Globe,
   Inbox,
   MailPlus,
   Moon,
@@ -31,8 +32,10 @@ interface SidebarProps {
   ownerEmail: string;
   activeSection: ActiveSection;
   activeFolder: FolderName;
+  selectedDomain: string | null;
   selectedAddress: string | null;
   counts: FolderCounts;
+  domainUnreadCounts: Record<string, number>;
   addresses: AddressRecord[];
   settings: AppSettings;
   mobileOpen: boolean;
@@ -42,6 +45,7 @@ interface SidebarProps {
   onCloseMobile: () => void;
   onCompose: () => void;
   onSelectFolder: (folder: FolderName) => void;
+  onSelectDomain: (domain: string | null) => void;
   onSelectAddress: (email: string | null) => void;
   onSelectSection: (section: ActiveSection, settingsTab?: "addresses" | "ai" | "keys" | "audit") => void;
 }
@@ -64,8 +68,10 @@ export function Sidebar({
   ownerEmail,
   activeSection,
   activeFolder,
+  selectedDomain,
   selectedAddress,
   counts,
+  domainUnreadCounts,
   addresses,
   settings,
   mobileOpen,
@@ -75,6 +81,7 @@ export function Sidebar({
   onCloseMobile,
   onCompose,
   onSelectFolder,
+  onSelectDomain,
   onSelectAddress,
   onSelectSection,
 }: SidebarProps) {
@@ -90,6 +97,19 @@ export function Sidebar({
     }
     return null;
   }
+
+  const activeAddresses = addresses.filter((a) => a.isActive);
+  const allDomains = Array.from(
+    new Set<string>([
+      ...(settings.mailDomains ?? []),
+      ...(settings.mailDomain ? [settings.mailDomain] : []),
+      ...activeAddresses.map((a) => a.email.split("@")[1]?.toLowerCase() ?? "").filter(Boolean),
+      ...Object.keys(domainUnreadCounts),
+    ]),
+  );
+
+  const isAllMailboxes =
+    selectedDomain === null && selectedAddress === null && activeSection === "mail";
 
   const content = (
     <aside className="neu-panel flex h-full w-64 flex-col border-r border-[var(--neu-divider)]">
@@ -145,7 +165,7 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* Main folders + Digests + Configured Addresses */}
+      {/* Main folders + Digests + Multi-Domain Mailboxes */}
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4" aria-label="Mailbox navigation">
         <div className="space-y-1">
           {FOLDER_ITEMS.map(({ id, label, icon: Icon }) => {
@@ -238,11 +258,11 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Configured Addresses filter */}
+        {/* Unified / Per-Domain Mailboxes & Aliases */}
         <div className="space-y-1 border-t border-[var(--neu-divider)] pt-3.5">
           <div className="flex items-center justify-between px-3 pb-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neu-text-muted)]">
-              Addresses
+              Mailboxes
             </span>
             <button
               type="button"
@@ -257,42 +277,95 @@ export function Sidebar({
           </div>
           <button
             type="button"
-            data-active={selectedAddress === null && activeSection === "mail"}
+            data-active={isAllMailboxes}
             onClick={() => {
               onSelectAddress(null);
               onCloseMobile();
             }}
-            className="neu-nav-item flex w-full items-center gap-2 rounded-xl py-1.5 pl-4 pr-3 text-left text-xs font-medium"
+            className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-xl py-1.5 pl-4 pr-3 text-left text-xs font-medium"
           >
-            <AtSign className="h-3.5 w-3.5 shrink-0 text-[var(--neu-text-muted)]" aria-hidden="true" />
-            <span className="truncate">
-              All {settings.mailDomain ? `(*@${settings.mailDomain})` : "Addresses"}
+            <span className="flex min-w-0 items-center gap-2">
+              <AtSign
+                className={`h-3.5 w-3.5 shrink-0 ${
+                  isAllMailboxes ? "text-[var(--neu-coral-text)]" : "text-[var(--neu-text-muted)]"
+                }`}
+                aria-hidden="true"
+              />
+              <span className="truncate">All Mailboxes</span>
             </span>
+            {counts.inboxUnread > 0 && (
+              <span className="neu-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+                {counts.inboxUnread}
+              </span>
+            )}
           </button>
-          {addresses
-            .filter((a) => a.isActive)
-            .map((addr) => {
-              const activeAddr = selectedAddress === addr.email && activeSection === "mail";
-              return (
+
+          {allDomains.map((domain) => {
+            const domainSelected =
+              selectedDomain === domain && selectedAddress === null && activeSection === "mail";
+            const domainUnread = domainUnreadCounts[domain] ?? 0;
+            const domainAliases = activeAddresses.filter(
+              (a) => (a.email.split("@")[1]?.toLowerCase() ?? "") === domain,
+            );
+
+            return (
+              <div key={domain} className="space-y-0.5 pt-0.5">
                 <button
-                  key={addr.id}
                   type="button"
-                  data-active={activeAddr}
+                  data-active={domainSelected}
                   onClick={() => {
-                    onSelectAddress(addr.email);
+                    onSelectDomain(domain);
                     onCloseMobile();
                   }}
-                  className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-xl py-1.5 pl-4 pr-3 text-left text-xs font-medium"
+                  className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-xl py-1.5 pl-4 pr-3 text-left text-xs font-semibold"
                 >
-                  <span className="truncate">{addr.email}</span>
-                  {addr.isDefault && (
-                    <span className="neu-badge-coral shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
-                      default
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Globe
+                      className={`h-3.5 w-3.5 shrink-0 ${
+                        domainSelected
+                          ? "text-[var(--neu-coral-text)]"
+                          : "text-[var(--neu-text-muted)]"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{domain}</span>
+                  </span>
+                  {domainUnread > 0 && (
+                    <span
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        domainSelected ? "neu-badge-coral-solid" : "neu-badge"
+                      }`}
+                    >
+                      {domainUnread}
                     </span>
                   )}
                 </button>
-              );
-            })}
+
+                {domainAliases.map((addr) => {
+                  const activeAddr = selectedAddress === addr.email && activeSection === "mail";
+                  return (
+                    <button
+                      key={addr.id}
+                      type="button"
+                      data-active={activeAddr}
+                      onClick={() => {
+                        onSelectAddress(addr.email);
+                        onCloseMobile();
+                      }}
+                      className="neu-nav-item flex w-full items-center justify-between gap-2 rounded-xl py-1 pl-7 pr-3 text-left text-[11px] font-medium"
+                    >
+                      <span className="truncate">{addr.email}</span>
+                      {addr.isDefault && (
+                        <span className="neu-badge-coral shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold">
+                          default
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </nav>
 

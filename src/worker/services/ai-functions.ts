@@ -27,7 +27,8 @@ import {
   triageThread,
 } from "./ai";
 import { getThreadDetail, sendOrDraftEmail } from "./mail";
-import type { ResendClient } from "./resend";
+import type { SelfHostedTrackingConfig } from "./tracking";
+import { resolveMailProvider, type MailTransport } from "./transports";
 
 export class FunctionDisabledError extends Error {
   readonly code = "AI_FUNCTION_DISABLED";
@@ -75,6 +76,13 @@ function mapDigestRow(row: DigestRow): DailyDigest {
   };
 }
 
+function hasConfiguredOutboundProvider(env: PostletEnv): boolean {
+  const provider = resolveMailProvider(env);
+  if (provider === "cloudflare") return Boolean(env.EMAIL);
+  if (provider === "ses") return Boolean(env.AWS_SES_ACCESS_KEY_ID && env.AWS_SES_SECRET_ACCESS_KEY);
+  return Boolean(env.RESEND_API_KEY);
+}
+
 /**
  * Formats a `Date` into local `YYYY-MM-DD` and local hour (`0..23`) for a given IANA timezone.
  */
@@ -114,7 +122,7 @@ export function getLocalDateAndHour(
 export async function generateDailyInboxSummary(
   db: D1Database,
   env: PostletEnv,
-  resendClient: ResendClient,
+  transport: MailTransport,
   options: {
     triggeredBy: "cron" | "owner" | string;
     actorType?: "postlet_ai" | "agent_key" | "owner";
@@ -233,7 +241,7 @@ Only include items directly grounded in the provided threads.`,
   let emailedTo: string | null = null;
   const shouldEmail =
     options.sendEmailCopy ?? (options.triggeredBy === "cron" && settings.aiDailySummaryEmailCopy);
-  if (shouldEmail && env.RESEND_API_KEY) {
+  if (shouldEmail && hasConfiguredOutboundProvider(env)) {
     const defAddr = await getDefaultAddress(db);
     if (defAddr) {
       const todoLines =
@@ -246,7 +254,7 @@ Only include items directly grounded in the provided threads.`,
           : "- None";
 
       try {
-        await resendClient.sendEmail({
+        await transport.sendEmail({
           from: defAddr.displayName ? `${defAddr.displayName} <${defAddr.email}>` : defAddr.email,
           to: [defAddr.email],
           subject: `Postlet Daily Inbox Summary — ${digestDate}`,
@@ -379,7 +387,7 @@ export async function toggleDigestTodo(
 export async function runScheduledDailySummaryCheck(
   db: D1Database,
   env: PostletEnv,
-  resendClient: ResendClient,
+  transport: MailTransport,
   now = new Date(),
 ): Promise<{ ran: boolean; reason: string; digestId?: string }> {
   const settings = await getSettings(db, env.MAIL_DOMAIN ?? "", env.DEFAULT_AI_MODEL);
@@ -398,7 +406,7 @@ export async function runScheduledDailySummaryCheck(
     return { ran: false, reason: `already_ran_${localDate}` };
   }
 
-  const digest = await generateDailyInboxSummary(db, env, resendClient, {
+  const digest = await generateDailyInboxSummary(db, env, transport, {
     triggeredBy: "cron",
     actorType: "postlet_ai",
     actorLabel: "postlet-ai",
@@ -428,7 +436,7 @@ const AUTOMATED_LOCAL_PARTS = [
 function isDisallowedAutoReplyAddress(
   rawEmail: string,
   ownedEmails: Set<string>,
-  mailDomain: string,
+  ownedDomains: Set<string>,
 ): string | null {
   const normalized = rawEmail.trim().toLowerCase();
   const [localPart, domain] = normalized.split("@");
@@ -436,7 +444,7 @@ function isDisallowedAutoReplyAddress(
   if (ownedEmails.has(normalized)) {
     return "Address matches an owned Postlet address";
   }
-  if (mailDomain && domain === mailDomain.toLowerCase()) {
+  if (domain && ownedDomains.has(domain)) {
     return "Address belongs to local mail domain";
   }
   if (
@@ -450,12 +458,12 @@ function isDisallowedAutoReplyAddress(
 
 /**
  * Enforces RFC 3834 loop protection to avoid replying to mailing lists, automated notifications,
- * bounced messages, or our own configured addresses. Validates both `fromAddress` and `replyTo`.
+ * bounced messages, or our own configured addresses/domains. Validates both `fromAddress` and `replyTo`.
  */
 export async function checkAutoReplySafety(
   db: D1Database,
   inboundMsg: MessageRecord,
-  mailDomain: string,
+  mailDomains: string | string[],
 ): Promise<string | null> {
   if (inboundMsg.direction !== "inbound") {
     return "Cannot auto-reply to an outbound message";
@@ -463,14 +471,22 @@ export async function checkAutoReplySafety(
 
   const configured = await listAddresses(db);
   const ownedSet = new Set(configured.map((a) => a.email.toLowerCase()));
+  const domainList = Array.isArray(mailDomains) ? mailDomains : [mailDomains];
+  const domainSet = new Set(
+    domainList.map((d) => d.trim().replace(/^@+/, "").toLowerCase()).filter(Boolean),
+  );
+  for (const addr of configured) {
+    const d = addr.email.split("@")[1]?.toLowerCase();
+    if (d) domainSet.add(d);
+  }
 
-  const fromBlock = isDisallowedAutoReplyAddress(inboundMsg.fromAddress, ownedSet, mailDomain);
+  const fromBlock = isDisallowedAutoReplyAddress(inboundMsg.fromAddress, ownedSet, domainSet);
   if (fromBlock) {
     return `Sender blocked: ${fromBlock}`;
   }
 
   if (inboundMsg.replyTo) {
-    const replyToBlock = isDisallowedAutoReplyAddress(inboundMsg.replyTo, ownedSet, mailDomain);
+    const replyToBlock = isDisallowedAutoReplyAddress(inboundMsg.replyTo, ownedSet, domainSet);
     if (replyToBlock) {
       return `Reply-To blocked: ${replyToBlock}`;
     }
@@ -510,7 +526,7 @@ export async function evaluateAndRunImportantAutoReply(
   db: D1Database,
   r2: R2Bucket,
   env: PostletEnv,
-  resendClient: ResendClient,
+  transport: MailTransport,
   threadId: string,
   options: {
     callerType: "webhook" | "owner" | "agent";
@@ -522,6 +538,7 @@ export async function evaluateAndRunImportantAutoReply(
     instructionsOverride?: string;
     force?: boolean;
   },
+  trackingConfig?: SelfHostedTrackingConfig,
 ): Promise<AutoReplyEvaluationResult> {
   const settings = await getSettings(db, env.MAIL_DOMAIN ?? "", env.DEFAULT_AI_MODEL);
   if (!settings.aiEnabled) {
@@ -545,7 +562,11 @@ export async function evaluateAndRunImportantAutoReply(
     return { executed: false, action: "skipped", reason: "no_inbound_message" };
   }
 
-  const safetyBlockReason = await checkAutoReplySafety(db, latestInbound, settings.mailDomain);
+  const safetyBlockReason = await checkAutoReplySafety(
+    db,
+    latestInbound,
+    settings.mailDomains.length > 0 ? settings.mailDomains : settings.mailDomain,
+  );
   if (safetyBlockReason) {
     await recordAuditLog(db, {
       actorType: options.callerType === "agent" ? "agent_key" : "postlet_ai",
@@ -668,7 +689,7 @@ Keep the reply concise, polite, accurate, and ready to send. Output ONLY the pla
   const { message } = await sendOrDraftEmail(
     db,
     r2,
-    resendClient,
+    transport,
     {
       mode: requestedMode === "auto_send" ? "send" : "pending_approval",
       fromAddress: fromEmail || undefined,
@@ -685,6 +706,7 @@ Keep the reply concise, polite, accurate, and ready to send. Output ONLY the pla
       actorLabel: options.actorLabel ?? "postlet-ai:auto-reply",
       agentKeyId: options.agentKeyId ?? null,
     },
+    trackingConfig,
   );
 
   await db

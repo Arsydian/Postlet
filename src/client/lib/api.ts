@@ -66,6 +66,7 @@ export const api = {
   listThreads(params: {
     folder?: FolderName;
     address?: string;
+    domain?: string;
     unread?: boolean;
     priority?: string;
     category?: string;
@@ -76,6 +77,7 @@ export const api = {
     const sp = new URLSearchParams();
     if (params.folder) sp.set("folder", params.folder);
     if (params.address) sp.set("address", params.address);
+    if (params.domain) sp.set("domain", params.domain);
     if (params.unread) sp.set("unread", "true");
     if (params.priority) sp.set("priority", params.priority);
     if (params.category) sp.set("category", params.category);

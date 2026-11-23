@@ -9,7 +9,12 @@
 import { Paperclip, Send, Sparkles, Trash2, X } from "lucide-react";
 import { marked } from "marked";
 import { useEffect, useId, useRef, useState } from "react";
-import type { AddressRecord, AppSettings, AttachmentRecord } from "../../shared/types";
+import type {
+  AddressRecord,
+  AppSettings,
+  AttachmentRecord,
+  MailProviderId,
+} from "../../shared/types";
 import { api } from "../lib/api";
 import { buildEmailIframeSrcDoc, plainTextToBasicHtml, sanitizeEmailHtml } from "../lib/sanitize";
 import type { ResolvedTheme } from "../lib/theme";
@@ -39,6 +44,8 @@ interface ComposerModalProps {
   initial: ComposerInitialState | null;
   addresses: AddressRecord[];
   settings: AppSettings;
+  mailProvider: MailProviderId;
+  selfHostedTrackingEnabled: boolean;
   resolvedTheme: ResolvedTheme;
   onClose: () => void;
   onDiscardDraft?: (messageId: string, threadId?: string) => Promise<void> | void;
@@ -63,6 +70,8 @@ export function ComposerModal({
   initial,
   addresses,
   settings,
+  mailProvider,
+  selfHostedTrackingEnabled,
   resolvedTheme,
   onClose,
   onDiscardDraft,
@@ -605,7 +614,7 @@ export function ComposerModal({
             />
           )}
 
-          {/* Resend Open & Click Tracking Switch */}
+          {/* Open & Click Tracking Switch */}
           {initial?.mode !== "approve_edit" && (
             <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-3 text-xs text-[var(--neu-text-secondary)] select-none">
               <input
@@ -618,10 +627,16 @@ export function ComposerModal({
               />
               <span>
                 <span className="font-medium text-[var(--neu-text)]">
-                  Enable Resend open &amp; link tracking
+                  Enable open &amp; link tracking
                 </span>{" "}
                 <span className="text-[11px] text-[var(--neu-text-muted)]">
-                  (adds a hidden tracking link)
+                  {selfHostedTrackingEnabled
+                    ? "(self-hosted pixel & link redirect)"
+                    : mailProvider === "resend"
+                      ? "(adds a hidden Resend tracking link)"
+                      : mailProvider === "ses"
+                        ? "(tracked via Amazon SES / SNS)"
+                        : "(requires TRACKING_BASE_URL + TRACKING_SECRET)"}
                 </span>
               </span>
             </label>

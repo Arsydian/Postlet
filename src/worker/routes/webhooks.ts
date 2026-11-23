@@ -1,12 +1,13 @@
 /**
  * @file src/worker/routes/webhooks.ts
- * @description Resend webhook receiver handling `email.received` inbound mail ingestion and
- * outbound delivery lifecycle updates (`sent`, `delivered`, `delayed`, `bounced`, `complained`),
- * guarded by Web Crypto Svix HMAC-SHA256 signature verification.
+ * @description Provider webhook receivers handling Resend (`email.received` & delivery/tracking
+ * webhooks via Svix HMAC-SHA256) and Amazon SES / SNS (`POST /api/webhooks/ses` via X.509 RSA
+ * signature verification and trusted `sns.*.amazonaws.com` certificate validation).
  */
 
 import { Hono } from "hono";
 import type { PostletEnv, PostletVariables } from "../env";
+import { timingSafeEqualStrings } from "../lib/crypto";
 import { getSettings } from "../services/addresses";
 import { triageThread } from "../services/ai";
 import { evaluateAndRunImportantAutoReply } from "../services/ai-functions";
@@ -16,6 +17,14 @@ import {
   type InboundWebhookData,
 } from "../services/mail";
 import { ResendClient, verifyResendWebhookSignature } from "../services/resend";
+import { getSelfHostedTrackingConfig } from "../services/tracking";
+import { createMailTransport } from "../services/transports";
+import {
+  isTrustedSnsUrl,
+  parseSesSnsNotification,
+  type SnsMessageEnvelope,
+  verifySnsSignature,
+} from "../services/transports/ses-transport";
 
 interface ResendWebhookEnvelope {
   type: string;
@@ -76,6 +85,7 @@ export function createWebhookRoutes(resendFetchFn?: typeof fetch) {
         c.env.ATTACHMENTS,
         resendClient,
         inboundData,
+        c.env.MAIL_DOMAIN ?? "",
       );
 
       console.log(
@@ -101,6 +111,8 @@ export function createWebhookRoutes(resendFetchFn?: typeof fetch) {
           (settings.aiAutoTriageEnabled || settings.aiImportantAutoReplyEnabled)
         ) {
           const threadId = result.threadId;
+          const transport = createMailTransport(c.env, resendFetchFn);
+          const trackingConfig = getSelfHostedTrackingConfig(c.env);
           const aiTask = (async () => {
             try {
               if (settings.aiAutoTriageEnabled) {
@@ -114,12 +126,13 @@ export function createWebhookRoutes(resendFetchFn?: typeof fetch) {
                   c.env.DB,
                   c.env.ATTACHMENTS,
                   c.env,
-                  resendClient,
+                  transport,
                   threadId,
                   {
                     callerType: "webhook",
                     actorLabel: "postlet-ai:auto-reply",
                   },
+                  trackingConfig,
                 );
               }
             } catch (err) {
@@ -176,6 +189,74 @@ export function createWebhookRoutes(resendFetchFn?: typeof fetch) {
     }
 
     return c.json({ ok: true, ignored: true, eventType: payload.type }, 200);
+  });
+
+  // Amazon SES -> SNS webhook receiver (Delivery, Bounce, Complaint, DeliveryDelay, Open, Click).
+  router.post("/ses", async (c) => {
+    const sharedSecret = c.env.SES_WEBHOOK_SECRET?.trim() ?? "";
+    if (sharedSecret) {
+      const provided =
+        c.req.header("x-postlet-webhook-secret")?.trim() ||
+        c.req.query("secret")?.trim() ||
+        "";
+      if (!provided || !(await timingSafeEqualStrings(provided, sharedSecret))) {
+        return c.json({ error: "Invalid SES webhook secret" }, 401);
+      }
+    }
+
+    const rawBody = await c.req.text();
+    let snsMsg: SnsMessageEnvelope;
+    try {
+      snsMsg = JSON.parse(rawBody) as SnsMessageEnvelope;
+    } catch {
+      return c.json({ error: "Malformed JSON SNS payload" }, 400);
+    }
+
+    const allowedTopicArn = c.env.SES_SNS_TOPIC_ARN?.trim();
+    if (allowedTopicArn && snsMsg.TopicArn !== allowedTopicArn) {
+      return c.json({ error: "SNS TopicArn mismatch" }, 403);
+    }
+
+    const sigValid = await verifySnsSignature(snsMsg, resendFetchFn);
+    if (!sigValid) {
+      console.error(
+        JSON.stringify({
+          message: "sns signature verification failed",
+          type: snsMsg?.Type ?? null,
+          topicArn: snsMsg?.TopicArn ?? null,
+        }),
+      );
+      return c.json({ error: "Invalid SNS signature" }, 401);
+    }
+
+    const safeFetch: typeof fetch =
+      !resendFetchFn || resendFetchFn === globalThis.fetch
+        ? (input, init) => globalThis.fetch(input, init)
+        : (input, init) => resendFetchFn(input, init);
+
+    if (snsMsg.Type === "SubscriptionConfirmation") {
+      if (snsMsg.SubscribeURL && isTrustedSnsUrl(snsMsg.SubscribeURL)) {
+        const confirmRes = await safeFetch(snsMsg.SubscribeURL, { method: "GET" });
+        return c.json({ ok: confirmRes.ok, subscribed: true }, 200);
+      }
+      return c.json({ error: "Invalid SubscribeURL" }, 400);
+    }
+
+    if (snsMsg.Type === "Notification" && snsMsg.Message) {
+      const parsedEvent = parseSesSnsNotification(snsMsg.Message);
+      if (!parsedEvent) {
+        return c.json({ ok: true, ignored: true }, 200);
+      }
+      const updateResult = await applyDeliveryWebhookEvent(
+        c.env.DB,
+        parsedEvent.eventType,
+        parsedEvent.eventData,
+        parsedEvent.timestamp,
+      );
+      return c.json({ ok: true, ...updateResult }, 200);
+    }
+
+    return c.json({ ok: true, ignored: true, type: snsMsg.Type }, 200);
   });
 
   return router;

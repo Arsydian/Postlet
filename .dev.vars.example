@@ -1,11 +1,25 @@
 # Local Wrangler Secrets Template (copy to `.dev.vars` for `npm run dev`)
 # In production, configure these in the Cloudflare Dashboard -> Worker -> Settings -> Variables and Secrets.
 
-# Resend API key with Sending & Receiving permissions
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxx
+# Outbound provider selector: "resend" (default) | "cloudflare" | "ses"
+MAIL_PROVIDER=resend
 
-# Resend webhook signing secret (starts with whsec_) from Resend Dashboard -> Webhooks
+# --- Option A: Resend Outbound (Default) & Optional Webhook Inbound ---
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxx
 RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxx
+
+# --- Option B: Amazon SES v2 Outbound & SNS Webhooks (when MAIL_PROVIDER=ses) ---
+# AWS_SES_ACCESS_KEY_ID=AKIAxxxxxxxxxxxxxxxx
+# AWS_SES_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# AWS_SES_REGION=us-east-1
+# AWS_SES_CONFIGURATION_SET=postlet-events
+# SES_WEBHOOK_SECRET=replace-with-random-secret
+# SES_SNS_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:postlet-ses-events
+
+# --- Optional: Self-Hosted Open & Click Tracking (/t/o/:token.gif & /t/c/:token) ---
+# Works across all providers (Cloudflare Email Sending, SES, and Resend).
+# TRACKING_BASE_URL=https://mail.example.com
+# TRACKING_SECRET=replace-with-random-32-byte-secret
 
 # Cloudflare Zero Trust Access team domain (without https://), e.g. myteam.cloudflareaccess.com
 CF_ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
@@ -13,7 +27,7 @@ CF_ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
 # Cloudflare Zero Trust Access Application Audience (AUD) tag
 CF_ACCESS_AUD=your-cloudflare-access-aud-tag
 
-# Primary domain configured in Resend (used as fallback when catch-all / addresses are checked)
+# Primary domain(s) (comma-separated for multi-domain catch-all, e.g. phnxlabs.dev, otherdomain.com)
 MAIL_DOMAIN=mail.example.com
 
 # Local development ONLY: allows bypassing Zero Trust JWT checks on localhost when CF_ACCESS_AUD is unset.

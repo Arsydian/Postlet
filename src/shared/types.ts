@@ -44,6 +44,9 @@ export type AiCategory =
   | "automated"
   | "personal";
 
+/** Outbound mail delivery provider configured for this Postlet instance. */
+export type MailProviderId = "resend" | "cloudflare" | "ses";
+
 /** Priority tiers produced by AI triage. */
 export type AiPriority = "high" | "normal" | "low";
 
@@ -154,6 +157,7 @@ export interface FolderCounts {
 /** Operational and Cloudflare Workers AI settings stored in D1 `app_settings`. */
 export interface AppSettings {
   mailDomain: string;
+  mailDomains: string[];
   catchAllEnabled: boolean;
   aiEnabled: boolean;
   aiModel: string;
@@ -252,7 +256,10 @@ export interface AdminMetaResponse {
   appName: string;
   appVersion: string;
   ownerEmail: string;
+  mailProvider: MailProviderId;
+  selfHostedTrackingEnabled: boolean;
   counts: FolderCounts;
+  domainUnreadCounts: Record<string, number>;
   settings: AppSettings;
   addresses: AddressRecord[];
   latestDigestDate: string | null;

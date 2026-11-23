@@ -35,7 +35,8 @@ import {
   listThreads,
   sendOrDraftEmail,
 } from "../services/mail";
-import { ResendClient } from "../services/resend";
+import { getSelfHostedTrackingConfig } from "../services/tracking";
+import { createMailTransport } from "../services/transports";
 
 export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
   const router = new Hono<{ Bindings: PostletEnv; Variables: PostletVariables }>();
@@ -47,7 +48,7 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       openapi: "3.1.0",
       info: {
         title: "Postlet Agent Mail API",
-        version: c.env.APP_VERSION || "0.4.0",
+        version: c.env.APP_VERSION || "0.5.0",
         description:
           "Scoped mail & built-in AI functions API for AI agents. Use read_only, read_draft, or read_write bearer tokens.",
       },
@@ -269,11 +270,11 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       return c.json({ error: reason }, 403);
     }
 
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", resendFetchFn);
+    const transport = createMailTransport(c.env, resendFetchFn);
     const created = await sendOrDraftEmail(
       c.env.DB,
       c.env.ATTACHMENTS,
-      resendClient,
+      transport,
       {
         mode: "pending_approval",
         fromAddress: fromEmail,
@@ -358,11 +359,12 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       return c.json({ error: reason }, 403);
     }
 
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", resendFetchFn);
+    const transport = createMailTransport(c.env, resendFetchFn);
+    const trackingConfig = getSelfHostedTrackingConfig(c.env);
     const sent = await sendOrDraftEmail(
       c.env.DB,
       c.env.ATTACHMENTS,
-      resendClient,
+      transport,
       {
         mode: "send",
         fromAddress: fromEmail,
@@ -380,6 +382,7 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
         forwardMessageId: parsed.data.forwardMessageId,
       },
       { actorLabel: `agent:${key.name}`, agentKeyId: key.id },
+      trackingConfig,
     );
 
     await recordAuditLog(c.env.DB, {
@@ -443,9 +446,9 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       });
       return c.json({ error: "Daily summary is not available for alias-scoped agent keys" }, 403);
     }
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", resendFetchFn);
+    const transport = createMailTransport(c.env, resendFetchFn);
     try {
-      const digest = await generateDailyInboxSummary(c.env.DB, c.env, resendClient, {
+      const digest = await generateDailyInboxSummary(c.env.DB, c.env, transport, {
         triggeredBy: `agent:${key.name}`,
         actorType: "agent_key",
         agentKeyId: key.id,
@@ -515,13 +518,14 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       return c.json({ error: "'auto_send' mode requires 'read_write' scope" }, 403);
     }
 
-    const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", resendFetchFn);
+    const transport = createMailTransport(c.env, resendFetchFn);
+    const trackingConfig = getSelfHostedTrackingConfig(c.env);
     try {
       const result = await evaluateAndRunImportantAutoReply(
         c.env.DB,
         c.env.ATTACHMENTS,
         c.env,
-        resendClient,
+        transport,
         thread.id,
         {
           callerType: "agent",
@@ -533,6 +537,7 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
           instructionsOverride: parsed.data.instructionsOverride,
           force: parsed.data.force,
         },
+        trackingConfig,
       );
       return c.json(result);
     } catch (err) {

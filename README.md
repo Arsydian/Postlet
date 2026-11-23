@@ -1,6 +1,6 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.4.0-E05337)
+# Postlet ![Version](https://img.shields.io/badge/version-0.5.0-E05337)
 
-Self-hosted, single-owner email client and AI-agent mail gateway running on **Cloudflare Workers** and **Resend** — designed to deploy directly from a synced GitHub repository and run comfortably inside Cloudflare's Free Tier.
+Self-hosted, modular multi-domain email client and AI-agent mail gateway running on **Cloudflare Workers** — pairing **free unlimited inbound** via Cloudflare Email Routing with pluggable outbound transports (**Resend**, **Cloudflare Email Sending**, or **Amazon SES v2**), designed to deploy directly from GitHub and run comfortably inside Cloudflare's Free Tier for personal mailbots or scale cleanly on Paid plans for transactional workloads.
 
 ## Screenshots
 
@@ -15,8 +15,8 @@ Self-hosted, single-owner email client and AI-agent mail gateway running on **Cl
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/composer-light.png" alt="Postlet Rich Text Composer with Resend open and link tracking switch" />
-      <p align="center"><em>Rich Text, Markdown &amp; Plain Text Composer with Resend Tracking Toggle</em></p>
+      <img src="docs/screenshots/composer-light.png" alt="Postlet Rich Text Composer with engagement tracking switch" />
+      <p align="center"><em>Rich Text, Markdown &amp; Plain Text Composer with Engagement Tracking Toggle</em></p>
     </td>
     <td width="50%">
       <img src="docs/screenshots/settings-dark.png" alt="Postlet Settings in Dark Mode with Cloudflare Workers AI controls" />
@@ -27,20 +27,27 @@ Self-hosted, single-owner email client and AI-agent mail gateway running on **Cl
 
 ## Features
 
-- **Full-Featured Web Inbox** (`/`): Tactile Soft UI responsive 3-pane interface with automatic OS color-scheme detection + persistent Light / Dark / System theme toggle, folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Rich Text (Bold, Italic, Underline, Strikethrough, Code, Headings, Lists, Blockquotes, Links), Markdown, and Plain Text composer, saved draft editing/discarding, Reply / Reply All / Forward, optional Resend open & link tracking switch, and live delivery + engagement status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`, `email.opened`, `email.clicked`).
-- **Catch-All & Address Manager**: Accept mail for `*@yourdomain.com` via Resend inbound webhooks, configure sender aliases in **Settings → Addresses & Domain**, and filter inbox threads per address.
+- **Full-Featured Web Inbox** (`/`): Tactile Soft UI responsive 3-pane interface with automatic OS color-scheme detection + persistent Light / Dark / System theme toggle, folder navigation, search (SQLite FTS5), sandboxed sanitized HTML email viewing, plain-text fallback, R2 attachment uploads/downloads, Rich Text (Bold, Italic, Underline, Strikethrough, Code, Headings, Lists, Blockquotes, Links), Markdown, and Plain Text composer, saved draft editing/discarding, Reply / Reply All / Forward, optional open & link tracking switch, and live delivery + engagement status tracking (`sent`, `delivered`, `delayed`, `bounced`, `complained`, `email.opened`, `email.clicked`).
+- **Free Unlimited Multi-Domain Inbound (Cloudflare Email Routing + `postal-mime`)**: Route catch-all mail across multiple custom domains directly into the Worker `email()` handler—parsing RFC 5322 MIME streams and streaming R2 attachments at zero Resend inbound quota cost—while preserving `/api/webhooks/resend` inbound webhook support.
+- **Unified & Per-Domain Scoped Inboxes**: View every configured domain together in **All Mailboxes** with domain badges, or click any domain/alias in the **Mailboxes** sidebar (with live per-domain unread counters) to scope the message list and default composer sender instantly.
+- **Pluggable Outbound Transports (`MAIL_PROVIDER`)**:
+  - **`resend`** *(Default)*: Ideal for free personal mailboxes (using Resend outbound while receiving unlimited mail free through Cloudflare Email Routing).
+  - **`cloudflare`**: Native Cloudflare Email Service (`send_email` binding + Queue consumer) for Workers Paid accounts sending transactional volume inside Cloudflare.
+  - **`ses`**: Pure Web Crypto AWS SigV4 client for Amazon SES v2 (`v2/email/outbound-emails`) + cryptographically verified X.509 SNS webhooks (`/api/webhooks/ses`).
+- **Self-Hosted Open & Click Tracking (`/t/*`)**: Optional provider-agnostic HMAC-SHA256 signed pixel (`/t/o/:token.gif`) and link redirect (`/t/c/:token`) endpoints enabled via `TRACKING_BASE_URL` + `TRACKING_SECRET` (automatically falling back to Resend native tracking when unset).
 - **Cloudflare Zero Trust Access Authentication**: Protects the Web UI and `/api/admin/*` with cryptographic RS256 JWKS verification of `Cf-Access-Jwt-Assertion` tokens.
 - **Built-In Cloudflare Workers AI Agent (`postlet-ai`)** *(Disabled by default)*: Uses your native Cloudflare `AI` binding (10,000 free Neurons/day). Toggle on in **Settings → AI Agent** to unlock:
   - **Auto-Triage & Cached Thread Summaries**: Priority (`high`/`normal`/`low`) and category classification cached in D1.
   - **Daily Inbox Summary (To-Dos & Reminders)**: Scheduled via hourly Worker Cron trigger at your chosen hour/timezone (or run on-demand) with interactive To-Do checklists and optional email delivery.
-  - **Important Email Auto-Reply**: Drafts (Pending Approval) or sends automatic replies to urgent human emails with strict RFC 3834 loop protection (`Auto-Submitted`, `List-Unsubscribe`, `noreply@`, own-domain block, and per-sender cooldown).
+  - **Important Email Auto-Reply**: Drafts (Pending Approval) or sends automatic replies to urgent human emails with strict multi-domain RFC 3834 loop protection (`Auto-Submitted`, `List-Unsubscribe`, `noreply@`, all owned domains/aliases blocked, and per-sender cooldown).
 - **AI Agent Gateway (`/mcp` & `/api/v1/*`)**: Issue scoped API keys (`read_only`, `read_draft`, `read_write`) with optional alias locks, recipient domain allowlists, hourly rate limits, allowed built-in AI functions, one-click MCP/cURL snippets, and a unified Audit Log.
 
 ---
 
 ## Architecture & Free-Tier Optimization
 
-- **Single Worker + Static Assets**: Built with Vite + `@cloudflare/vite-plugin` (`run_worker_first: ["/api/*", "/mcp"]` so UI assets serve directly at the edge).
+- **Single Worker + Static Assets**: Built with Vite + `@cloudflare/vite-plugin` (`run_worker_first: ["/api/*", "/mcp", "/t/*"]` so UI assets serve directly at the edge).
+- **Zero-Quota Personal Mode**: Receive unlimited emails across all your domains through Cloudflare Email Routing (`email()` handler + `postal-mime`) and keep Resend strictly for outbound personal emails (`MAIL_PROVIDER: "resend"`), keeping inbound mail off your Resend quota.
 - **Cloudflare D1**: Stores threads, messages, FTS5 search index, hashed API keys, settings, AI digests, and audit logs using targeted composite indexes to minimize row reads.
 - **Cloudflare R2**: Streams attachment uploads/downloads directly and serves downloads with `Cache-Control: private, max-age=31536000, immutable` to minimize Class B reads.
 - **Cloudflare Workers AI**: Caches summaries/triage in D1 and enforces a configurable daily call cap (`50/day` default) to stay safely inside the 10,000 free Neurons/day allowance.
@@ -77,9 +84,9 @@ npm run build
 ## Deployment via GitHub → Cloudflare Workers Git Sync
 
 ### 1. Automatic D1 & R2 Provisioning (Zero Manual DB Setup)
-`wrangler.jsonc` uses **Wrangler Automatic Resource Provisioning** (no `database_id` hardcoded in Git):
+`wrangler.jsonc` uses **Wrangler Automatic Resource Provisioning** (no `database_id` hardcoded in Git) and stays 100% **Workers Free Tier** compatible out of the box (`MAIL_PROVIDER: "resend"`, no Paid-only bindings enabled by default):
 - On first deployment, Cloudflare automatically creates the `postlet-db` D1 database and `postlet-attachments` R2 bucket and binds them to `DB` and `ATTACHMENTS` (and reuses them automatically on all future deploys).
-- On first Worker execution (HTTP request or scheduled Cron), Postlet's runtime schema bootstrapper automatically creates any missing D1 tables, FTS5 search indexes, triggers, and safe default settings (`ai_enabled = 'false'`).
+- On first Worker execution (HTTP request, inbound email, or scheduled Cron), Postlet's runtime schema bootstrapper automatically creates any missing D1 tables, FTS5 search indexes, triggers, and safe default settings (`ai_enabled = 'false'`).
 
 #### Two One-Time Cloudflare Dashboard Prerequisites
 Before your first Git-triggered deploy:
@@ -101,31 +108,84 @@ Before your first Git-triggered deploy:
    - `AI` → Workers AI
 
 ### 3. Configure Environment Variables & Secrets on Cloudflare Dashboard
-Open **Worker → Settings → Variables and Secrets** and add the 5 variables below.
+Open **Worker → Settings → Variables and Secrets** and add the variables for your setup.
 
 **Should they be `Text` or `Secret`?**
 To your running Worker code (`env.VARIABLE`), **`Text` and `Secret` behave identically**. The difference is purely about security and convenience in the Cloudflare Dashboard:
-- **Always use `Secret`** for actual credentials (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`). Secrets are encrypted at rest and hidden permanently after saving.
-- **`Text` or `Secret` both work** for non-secret config values (`CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `MAIL_DOMAIN`). Choosing `Text` lets you view and double-check them later in the Dashboard; choosing `Secret` masks them if you prefer not to leave config values readable in Dashboard screens.
-- **Safe across GitHub deploys**: `wrangler.jsonc` sets `"keep_vars": true`, so any `Text` variables you configure in the Cloudflare Dashboard are preserved across future GitHub pushes instead of being overwritten by `wrangler deploy`.
-- **Managed automatically**: `APP_NAME`, `APP_VERSION`, and `DEFAULT_AI_MODEL` are already configured in `wrangler.jsonc` — do not duplicate them in the Dashboard.
+- **Always use `Secret`** for actual credentials (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `AWS_SES_SECRET_ACCESS_KEY`, `SES_WEBHOOK_SECRET`, `TRACKING_SECRET`). Secrets are encrypted at rest and hidden permanently after saving.
+- **`Text` or `Secret` both work** for non-secret config values (`CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `MAIL_DOMAIN`, `MAIL_PROVIDER`, `AWS_SES_REGION`, `TRACKING_BASE_URL`). Choosing `Text` lets you view and double-check them later in the Dashboard; choosing `Secret` masks them if you prefer not to leave config values readable in Dashboard screens.
+- **Safe across GitHub deploys**: `wrangler.jsonc` sets `"keep_vars": true`, so Dashboard `Text` variables are preserved across future GitHub pushes.
+- **Managed automatically**: `APP_NAME`, `APP_VERSION`, and `DEFAULT_AI_MODEL` (plus default `"MAIL_PROVIDER": "resend"`) are set in `wrangler.jsonc` — override `MAIL_PROVIDER` in Dashboard Secrets/Vars or per deployment only if switching providers.
 - **Production safety**: Do **not** set `DEV_BYPASS_ACCESS` in production.
+
+#### Core Variables (All Setups)
 
 | Name | Recommended Type | Example / Where to Find It | Purpose |
 |---|---|---|---|
-| `RESEND_API_KEY` | **Secret** *(Required)* | `re_...` from Resend Dashboard → API Keys | Resend API key with **Sending** + **Receiving** permissions. Never store as `Text`. |
-| `RESEND_WEBHOOK_SECRET` | **Secret** *(Required)* | `whsec_...` from Resend Dashboard → Webhooks | Svix signing secret used to verify every inbound webhook cryptographically. Never store as `Text`. |
-| `CF_ACCESS_TEAM_DOMAIN` | **Text** or **Secret** *(Required)* | `myteam.cloudflareaccess.com` (from Zero Trust → Settings) | Your Zero Trust team domain (`https://` optional; normalized automatically). |
-| `CF_ACCESS_AUD` | **Text** or **Secret** *(Required)* | 64-char hex AUD tag on your main Access App | Application Audience (AUD) tag used to verify the user's Access JWT signature and audience. |
-| `MAIL_DOMAIN` | **Text** or **Secret** *(Recommended)* | `mail.yourdomain.com` | Verified Resend sending/receiving domain used as fallback before configuring in Web UI Settings. |
+| `CF_ACCESS_TEAM_DOMAIN` | **Text** or **Secret** *(Required)* | `myteam.cloudflareaccess.com` (Zero Trust → Settings) | Your Zero Trust team domain (`https://` optional; normalized automatically). |
+| `CF_ACCESS_AUD` | **Text** or **Secret** *(Required)* | 64-char hex AUD tag on your main Access App | Application Audience (AUD) tag used to verify the Access JWT signature and audience. |
+| `MAIL_DOMAIN` | **Text** or **Secret** *(Recommended)* | `domain1.com,domain2.dev` | Comma-separated mail domains accepted as fallback before editing in **Settings → Addresses & Domain**. |
+| `MAIL_PROVIDER` | **Text** *(Optional)* | `resend` *(default)* \| `cloudflare` \| `ses` | Selects the active outbound transport provider. Defaults cleanly to `resend`. |
 
-### 4. Configure Cloudflare Zero Trust Access
+#### Provider A: Personal Free Tier (`MAIL_PROVIDER=resend` + Cloudflare Email Routing Inbound)
 
-Cloudflare Access is an interactive browser login gate (redirecting unauthenticated requests to an OTP / SSO login page). Postlet uses **path-scoped Access applications** so human Web UI routes stay locked behind your email login while non-browser machine endpoints (`/api/webhooks/resend`, `/api/v1/*`, `/mcp`) can present their own cryptographic credentials directly.
+| Name | Recommended Type | Example / Where to Find It | Purpose |
+|---|---|---|---|
+| `RESEND_API_KEY` | **Secret** *(Required)* | `re_...` from Resend Dashboard → API Keys | Outbound **Sending** (plus Receiving if you also use `/api/webhooks/resend`). |
+| `RESEND_WEBHOOK_SECRET` | **Secret** *(Required for Resend webhooks)* | `whsec_...` from Resend Dashboard → Webhooks | Verifies delivery status (`sent`, `delivered`, `bounced`) and optional Resend inbound webhooks via Svix HMAC-SHA256. |
+
+#### Provider B: High-Volume / Transactional via Native Cloudflare (`MAIL_PROVIDER=cloudflare`, Workers Paid)
+For projects on a paid Workers account sending 300–500+ emails/day directly inside Cloudflare without third-party SMTP credentials:
+1. Set `MAIL_PROVIDER` = `cloudflare`.
+2. Enable Email Service outbound bindings on that project's `wrangler.jsonc`:
+```jsonc
+"send_email": [
+  { "name": "EMAIL" }
+],
+"queues": {
+  "consumers": [
+    { "queue": "postlet-email-events", "max_batch_size": 25 }
+  ]
+}
+```
+3. Attach the queue notification topic from Cloudflare Email Service to `postlet-email-events` so `queue()` automatically updates `delivered` / `bounced` / `delayed` / `complained` statuses in D1.
+
+#### Provider C: High-Volume / Transactional via Amazon SES v2 (`MAIL_PROVIDER=ses`)
+
+| Name | Recommended Type | Purpose |
+|---|---|---|
+| `MAIL_PROVIDER` | **Text** | Set to `ses`. |
+| `AWS_SES_ACCESS_KEY_ID` | **Secret** | IAM access key with `ses:SendEmail` / `ses:SendRawEmail`. |
+| `AWS_SES_SECRET_ACCESS_KEY` | **Secret** | IAM secret key used for pure Web Crypto AWS SigV4 request signing. |
+| `AWS_SES_REGION` | **Text** | AWS region (e.g., `us-east-1`). |
+| `AWS_SES_CONFIGURATION_SET` | **Text** *(Optional)* | SES Configuration Set publishing Delivery/Bounce/Complaint/Open/Click events to SNS. |
+| `SES_WEBHOOK_SECRET` | **Secret** *(Optional, Recommended)* | Shared secret appended as `?secret=...` or `x-postlet-webhook-secret` header on SNS HTTPS endpoints. |
+| `SES_SNS_TOPIC_ARN` | **Text** *(Optional, Recommended)* | Exact SNS Topic ARN allowlist checked alongside X.509 PEM RSA signature verification. |
+
+Point your Amazon SNS HTTPS subscription to `https://mail.yourdomain.com/api/webhooks/ses?secret=<SES_WEBHOOK_SECRET>` — Postlet automatically confirms `SubscriptionConfirmation` callbacks and processes `Notification` events.
+
+#### Optional: Provider-Agnostic Self-Hosted Engagement Tracking (`/t/*`)
+Works with **any** outbound provider (`resend`, `cloudflare`, or `ses`) when both variables below are set (when unset, `resend` continues using Resend's native tracking):
+
+| Name | Recommended Type | Example | Purpose |
+|---|---|---|---|
+| `TRACKING_BASE_URL` | **Text** | `https://mail.yourdomain.com` | Public origin embedded in signed open pixel & click-redirect links. |
+| `TRACKING_SECRET` | **Secret** | 32+ byte random string (`openssl rand -hex 32`) | HMAC-SHA256 key signing `/t/o/:token.gif` and `/t/c/:token` tokens against tampering. |
+
+### 4. Configure Multi-Domain Inbound Routing (Free Unlimited via Cloudflare Email Routing)
+1. For each domain you own on Cloudflare (**Dashboard → Domain → Email → Email Routing**):
+   - Enable Email Routing (Cloudflare automatically adds free receiving MX & SPF records).
+   - Under **Routing rules → Catch-all address**, edit action to **Send to a Worker** and choose your `postlet` Worker (and/or add individual custom addresses pointing to the same `postlet` Worker).
+2. Add all routed domains in Postlet under **Settings → Addresses & Domain** (`Mail Domains`, e.g., `phnxlabs.dev, otherdomain.com`) or via comma-separated `MAIL_DOMAIN`.
+3. Note: Even when inbound arrives free via Cloudflare Email Routing (`email()`), leave your DNS DKIM/SPF records configured for your chosen `MAIL_PROVIDER` (`resend`, `cloudflare`, or `ses`) so outbound mail passes DMARC cleanly! *(Using Cloudflare Email Routing MX records for inbound + Resend subdomain `send.yourdomain.com` SPF/DKIM for outbound avoids any MX conflict.)*
+
+### 5. Configure Cloudflare Zero Trust Access
+
+Cloudflare Access is an interactive browser login gate (redirecting unauthenticated requests to an OTP / SSO login page). Postlet uses **path-scoped Access applications** so human Web UI routes stay locked behind your email login while non-browser machine endpoints (`/api/webhooks/*`, `/t/*`, `/api/v1/*`, `/mcp`) can present their own cryptographic credentials directly.
 
 > **Important:** Never add a `Bypass` policy to your root `mail.yourdomain.com` application — that would bypass Access for the entire Web UI. Always place Bypass or Service Auth policies on **separate Self-hosted applications scoped to specific sub-paths**. Cloudflare Access evaluates only the most specific matching path for a request, so `/` and `/api/admin/*` remain strictly protected.
 
-#### 4a. Main Application (Protects Web UI `/` and `/api/admin/*`)
+#### 5a. Main Application (Protects Web UI `/` and `/api/admin/*`)
 1. Go to **Cloudflare Zero Trust → Access controls → Applications → Add an application → Self-hosted**.
 2. Set:
    - **Application domain**: `mail.yourdomain.com` (leave **Path** blank so it covers `/` and `/api/admin/*`).
@@ -136,57 +196,38 @@ Cloudflare Access is an interactive browser login gate (redirecting unauthentica
    - **Value**: your personal email address (e.g., `you@example.com`)
 4. Save the application, then copy its **Application Audience (AUD) Tag** into `CF_ACCESS_AUD` (and confirm your team domain `<team>.cloudflareaccess.com` under **Zero Trust → Settings** for `CF_ACCESS_TEAM_DOMAIN`).
 
-#### 4b. Non-Browser Machine Endpoints (Sub-Path Applications & Selector)
-Create separate **Self-hosted** applications for the specific machine paths you need. For standard **Bypass** rules:
-- **Action**: `Bypass`
-- **Rule type**: `Include`
-- **Selector**: `Everyone` *(Value: Everyone — Bypass disables interactive SSO/email challenges, so identity selectors like `Emails` are not used here.)*
-
-Only create the sub-path apps you actually use:
+#### 5b. Non-Browser Machine & Tracking Endpoints (Sub-Path Applications)
+Create separate **Self-hosted** applications only for the machine/tracking paths you actually use (`Action: Bypass` → `Include` → `Everyone`):
 
 | Sub-Path Application Domain | Policy | Required? | Why Needed |
 |---|---|---|---|
-| `mail.yourdomain.com/api/webhooks/resend` | `Bypass` → Include → `Everyone` | **Required** | Resend delivers inbound emails & delivery status webhooks here without a browser session. |
-| `mail.yourdomain.com/api/v1/*` | `Bypass` → Include → `Everyone` *(or `Service Auth`)* | **Only if using REST API / scripts** | Lets external scripts/services (e.g. Uptimeflare) call Postlet REST APIs; `/*` covers all sub-routes. |
-| `mail.yourdomain.com/mcp` | `Bypass` → Include → `Everyone` *(or `Service Auth`)* | **Only if using external MCP AI agents** | Lets Claude, Cursor, Antigravity, etc. connect via Streamable HTTP MCP. |
+| `mail.yourdomain.com/api/webhooks/resend` | `Bypass` → Include → `Everyone` | **When using Resend** | Resend delivers outbound delivery status webhooks (and optional Resend inbound) here without a browser session. |
+| `mail.yourdomain.com/api/webhooks/ses` | `Bypass` → Include → `Everyone` | **Only if using `MAIL_PROVIDER=ses`** | Amazon SNS posts X.509-signed delivery/bounce/open/click notifications here. |
+| `mail.yourdomain.com/t/*` | `Bypass` → Include → `Everyone` | **Only if using self-hosted tracking** | Lets external email clients load signed `/t/o/:token.gif` open pixels and follow `/t/c/:token` click links without Access login prompts. |
+| `mail.yourdomain.com/api/v1/*` | `Bypass` → `Everyone` *(or `Service Auth`)* | **Only if using REST API / scripts** | Lets external scripts/services call Postlet REST APIs; `/*` covers all sub-routes. |
+| `mail.yourdomain.com/mcp` | `Bypass` → `Everyone` *(or `Service Auth`)* | **Only if using external MCP AI agents** | Lets Claude, Cursor, Antigravity, etc. connect via Streamable HTTP MCP. |
 | `mail.yourdomain.com/api/health` | `Bypass` → Include → `Everyone` | **Optional** | Only needed if an external uptime monitor probes `/api/health` without Access auth. |
 
-#### 4c. Why Bypass on These Paths Is Still Secure (Defense-in-Depth)
+#### 5c. Why Bypass on These Paths Is Still Secure (Defense-in-Depth)
 Setting a sub-path to **Bypass** disables Cloudflare's browser login redirect *only on that exact path* — the Worker still enforces strict application-layer authentication before exposing any mailbox data:
 
 | Path | Cloudflare Access Gate | Worker-Side Cryptographic Security |
 |---|---|---|
 | `/` & `/api/admin/*` | **Allow (`Emails`)** — **Never bypassed** | Re-verifies the `Cf-Access-Jwt-Assertion` RS256 signature against Cloudflare's JWKS keys (`iss`, `aud`, `exp`) on every `/api/admin/*` call, plus CSRF header/Origin validation on mutations. |
 | `/api/webhooks/resend` | **Bypass (`Everyone`)** | Verifies Svix **HMAC-SHA256** (`svix-id`, `svix-timestamp`, `svix-signature`) using `RESEND_WEBHOOK_SECRET` with constant-time comparison and a ±5-minute replay window. Unsigned or forged requests receive `401`. |
-| `/api/v1/*` & `/mcp` | **Bypass** *(or `Service Auth`)* | Requires a scoped **`Authorization: Bearer plt_...`** API key (stored as SHA-256 hash in D1) enforcing tier (`read_only` / `read_draft` / `read_write`), optional alias locks, recipient-domain allowlists, hourly rate limits, instant revocation, and full audit logging. Missing/invalid tokens receive `401`. *(Exception: `GET /api/v1/openapi.json` is an intentional public API schema descriptor returning no mailbox data, and `GET /api/health` returns only `{ ok, service, version }`.)* |
+| `/api/webhooks/ses` | **Bypass (`Everyone`)** | Verifies `x-postlet-webhook-secret` (when set), `SES_SNS_TOPIC_ARN` allowlist (when set), `https://sns.<region>.amazonaws.com` cert host check, and X.509 PEM **RSA SHA-256** SNS signature before processing. |
+| `/t/*` | **Bypass (`Everyone`)** | Verifies **HMAC-SHA256** token signature against `TRACKING_SECRET` with constant-time comparison and restricts redirect schemes strictly to `http:` / `https:`. |
+| `/api/v1/*` & `/mcp` | **Bypass** *(or `Service Auth`)* | Requires a scoped **`Authorization: Bearer plt_...`** API key (stored as SHA-256 hash in D1) enforcing tier (`read_only` / `read_draft` / `read_write`), optional alias locks, recipient-domain allowlists, hourly rate limits, instant revocation, and full audit logging. |
 
-#### 4d. Optional Extra Hardening (Locking Down Beyond `Bypass → Everyone`)
-If you want defense at Cloudflare's edge *in addition to* Worker authentication:
-1. **Minimize exposed paths**: Only create sub-path applications for endpoints you actually use — start with **only** `/api/webhooks/resend`, and omit `/api/health`, `/api/v1/*`, and `/mcp` until needed.
-2. **Use `Service Auth` + Service Tokens for `/api/v1/*` and `/mcp`**:
-   - Create a Service Token under **Zero Trust → Access controls → Service Auth → Service Tokens** (`CF-Access-Client-Id` & `CF-Access-Client-Secret`).
-   - On the `/api/v1/*` (and/or `/mcp`) Access app, replace `Bypass` with **Action**: `Service Auth` | **Rule type**: `Include` | **Selector**: `Service Token` (select your token).
-   - Clients must now pass **both** the Cloudflare Service Token headers at the edge **and** Postlet's `Authorization: Bearer plt_...` key inside the Worker (and Access logs every request). *Note: check whether your MCP client supports custom request headers alongside `Authorization` before enabling `Service Auth` on `/mcp`.*
-   - Alternatively, if your AI agent or service runs from a fixed static IP, keep **Action**: `Bypass` but change **Selector** from `Everyone` to **IP ranges**.
-3. **Resend Webhook (`/api/webhooks/resend`) edge filtering**: Resend does not attach custom Cloudflare Service Token headers and delivers via Svix IPs that can change over time, so **Bypass + Svix HMAC-SHA256 verification** is the standard pattern. You can optionally layer a **Cloudflare WAF Custom Rule** on `/api/webhooks/resend` requiring a `POST` method and a non-empty `svix-signature` header alongside Rate Limiting.
+*(Optional extra hardening: swap `Bypass` on `/api/v1/*` and `/mcp` for Cloudflare Access `Service Auth` service tokens, or layer a WAF Custom Rule requiring `POST` + `svix-signature` on `/api/webhooks/resend`.)*
 
-### 5. Configure Resend Domain & Webhooks
-1. In **Resend Dashboard → Domains**, add and verify DNS records (SPF, DKIM, and Receiving MX record) for your domain.
-2. In **Resend Dashboard → Webhooks**, add an endpoint pointing to:
-   `https://mail.yourdomain.com/api/webhooks/resend`
-3. Subscribe to events:
-   - `email.received`
-   - `email.sent`
-   - `email.delivered`
-   - `email.delivery_delayed`
-   - `email.bounced`
-   - `email.complained`
-   - `email.opened` *(optional, when using Resend Open Tracking)*
-   - `email.clicked` *(optional, when using Resend Click Tracking)*
-4. Copy the Signing Secret (`whsec_...`) into Cloudflare Worker Secret `RESEND_WEBHOOK_SECRET`.
+### 6. Configure Resend Outbound Domain & Delivery Webhooks *(When `MAIL_PROVIDER=resend`)*
+1. In **Resend Dashboard → Domains**, add and verify outbound DNS records (SPF on `send` subdomain + DKIM) for your domain(s). *(Tip: If Cloudflare Email Routing handles inbound mail on `@yourdomain.com`, you do **not** need Resend's root `@` receiving MX record.)*
+2. In **Resend Dashboard → Webhooks**, add an endpoint pointing to `https://mail.yourdomain.com/api/webhooks/resend` and subscribe to `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained` *(plus `email.received` if routing inbound via Resend, and `email.opened` / `email.clicked` if not using `/t/*`)*.
+3. Copy the Signing Secret (`whsec_...`) into Cloudflare Worker Secret `RESEND_WEBHOOK_SECRET`.
 
-### 6. First Login & Optional AI Activation
+### 7. First Login & Optional AI Activation
 1. Visit `https://mail.yourdomain.com` and sign in via Cloudflare Zero Trust.
-2. Open **Settings → Addresses & Domain** to add your default sender address (e.g., `me@yourdomain.com`).
+2. Open **Settings → Addresses & Domain** to configure your **Mail Domains** (`domain1.com, domain2.dev`) and add sender aliases (e.g., `me@domain1.com`, `hello@domain2.dev`).
 3. *(Optional)* Open **Settings → AI Agent (Cloudflare AI)** to toggle on the built-in Cloudflare AI agent, Daily Inbox Summaries (To-Dos & Reminders), and Important Email Auto-Reply.
 4. Open **Settings → Agent Keys & MCP** to generate `read_only`, `read_draft`, or `read_write` tokens with ready-to-copy MCP JSON and `curl` snippets.

@@ -5,6 +5,7 @@
  */
 
 import { base64ToBytes, bytesToBase64, timingSafeEqualStrings } from "../lib/crypto";
+import type { MailTransport } from "./transports/types";
 
 export interface ResendAttachmentInput {
   filename: string;
@@ -151,7 +152,8 @@ export async function verifyResendWebhookSignature(
 /**
  * Lightweight, Cloudflare Workers-native client for the Resend REST API.
  */
-export class ResendClient {
+export class ResendClient implements MailTransport {
+  readonly provider = "resend" as const;
   private readonly apiKey: string;
   private readonly fetchFn: typeof fetch;
   private readonly baseUrl: string;

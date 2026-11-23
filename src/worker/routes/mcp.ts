@@ -41,7 +41,8 @@ import {
   listThreads,
   sendOrDraftEmail,
 } from "../services/mail";
-import { ResendClient } from "../services/resend";
+import { getSelfHostedTrackingConfig } from "../services/tracking";
+import { createMailTransport, type MailTransport } from "../services/transports";
 
 interface JsonRpcRequest {
   jsonrpc?: string;
@@ -330,7 +331,7 @@ export function createMcpRoutes(resendFetchFn?: typeof fetch) {
           capabilities: { tools: {} },
           serverInfo: {
             name: "postlet-mcp",
-            version: c.env.APP_VERSION || "0.4.0",
+            version: c.env.APP_VERSION || "0.5.0",
           },
         },
       });
@@ -375,14 +376,14 @@ export function createMcpRoutes(resendFetchFn?: typeof fetch) {
     if (body.method === "tools/call") {
       const toolName = String(body.params?.name ?? "");
       const args = (body.params?.arguments ?? {}) as Record<string, unknown>;
-      const resendClient = new ResendClient(c.env.RESEND_API_KEY ?? "", resendFetchFn);
+      const transport = createMailTransport(c.env, resendFetchFn);
 
       try {
         const result = await executeMcpTool(
           c.env,
           key,
           settings,
-          resendClient,
+          transport,
           toolName,
           args,
         );
@@ -423,11 +424,12 @@ async function executeMcpTool(
   env: PostletEnv,
   key: AgentKeyRecord,
   _settings: AppSettings,
-  resendClient: ResendClient,
+  transport: MailTransport,
   toolName: string,
   args: Record<string, unknown>,
 ) {
   const db = env.DB;
+  const trackingConfig = getSelfHostedTrackingConfig(env);
 
   switch (toolName) {
     case "list_threads": {
@@ -541,7 +543,7 @@ async function executeMcpTool(
       if (key.allowedAddressEmail) {
         throw new Error("Permission denied: Daily summary is not available for alias-scoped keys");
       }
-      const digest = await generateDailyInboxSummary(db, env, resendClient, {
+      const digest = await generateDailyInboxSummary(db, env, transport, {
         triggeredBy: `agent:${key.name}`,
         actorType: "agent_key",
         agentKeyId: key.id,
@@ -616,7 +618,7 @@ async function executeMcpTool(
       const created = await sendOrDraftEmail(
         db,
         env.ATTACHMENTS,
-        resendClient,
+        transport,
         {
           mode: "pending_approval",
           fromAddress: fromAddress || undefined,
@@ -668,7 +670,7 @@ async function executeMcpTool(
         db,
         env.ATTACHMENTS,
         env,
-        resendClient,
+        transport,
         parsed.data.threadId,
         {
           callerType: "agent",
@@ -680,6 +682,7 @@ async function executeMcpTool(
           instructionsOverride: parsed.data.instructions,
           force: parsed.data.force,
         },
+        trackingConfig,
       );
       return mcpTextResult(res);
     }
@@ -713,7 +716,7 @@ async function executeMcpTool(
       const sent = await sendOrDraftEmail(
         db,
         env.ATTACHMENTS,
-        resendClient,
+        transport,
         {
           mode: "send",
           fromAddress: fromAddress || undefined,
@@ -731,6 +734,7 @@ async function executeMcpTool(
           forwardMessageId: parsed.data.forwardMessageId,
         },
         { actorLabel: `agent:${key.name}`, agentKeyId: key.id },
+        trackingConfig,
       );
 
       await recordAuditLog(db, {
@@ -765,7 +769,7 @@ async function executeMcpTool(
         db,
         env.ATTACHMENTS,
         env,
-        resendClient,
+        transport,
         parsed.data.threadId,
         {
           callerType: "agent",
@@ -777,6 +781,7 @@ async function executeMcpTool(
           instructionsOverride: parsed.data.instructions,
           force: parsed.data.force,
         },
+        trackingConfig,
       );
       return mcpTextResult(res);
     }

@@ -27,12 +27,18 @@ import {
 import {
   claimPendingAttachments,
   deleteAttachmentsForMessage,
+  ingestResendAttachments,
   listAttachmentsByMessageIds,
   loadAttachmentsForResend,
-  ingestResendAttachments,
+  storeAttachment,
   syncDraftAttachments,
 } from "./attachments";
 import type { ResendClient, ResendWebhookAttachmentMeta } from "./resend";
+import {
+  instrumentHtmlWithSelfHostedTracking,
+  type SelfHostedTrackingConfig,
+} from "./tracking";
+import type { MailTransport } from "./transports";
 
 interface ThreadRow {
   id: string;
@@ -338,60 +344,62 @@ export interface IngestInboundResult {
   messageId?: string;
 }
 
-/**
- * Ingests an inbound `email.received` Resend webhook idempotently, fetching full email content
- * via Resend Receiving API, checking catch-all vs. configured addresses, creating/updating the
- * conversation thread, and streaming attachments into R2.
- */
-export async function ingestInboundEmail(
+export interface DirectInboundAttachmentInput {
+  filename: string;
+  contentType: string;
+  contentDisposition?: string;
+  contentId?: string | null;
+  data: Uint8Array;
+}
+
+export interface DirectInboundEmailInput {
+  providerMessageId: string;
+  fromAddress: string;
+  fromName?: string;
+  toAddresses: string[];
+  ccAddresses?: string[];
+  bccAddresses?: string[];
+  replyTo?: string | null;
+  subject?: string;
+  textBody?: string | null;
+  htmlBody?: string | null;
+  headers?: Record<string, string>;
+  rfcMessageId?: string | null;
+  createdAt?: string;
+  attachments?: DirectInboundAttachmentInput[];
+  envMailDomain?: string;
+}
+
+interface NormalizedInboundRecord {
+  providerMessageId: string;
+  parsedFrom: { email: string; name: string };
+  toList: string[];
+  ccList: string[];
+  bccList: string[];
+  replyToHeader: string | null;
+  subject: string;
+  textBody: string;
+  htmlBody: string;
+  normalizedHeaders: Record<string, string>;
+  rfcMessageId: string;
+  inReplyTo: string | null;
+  referencesHeader: string | null;
+  messageTimestamp: string;
+}
+
+async function persistNormalizedInboundEmail(
   db: D1Database,
-  r2: R2Bucket,
-  resendClient: ResendClient,
-  webhookData: InboundWebhookData,
+  normalized: NormalizedInboundRecord,
+  envMailDomain: string,
+  saveAttachments?: (messageId: string) => Promise<void>,
 ): Promise<IngestInboundResult> {
-  // Idempotency guard so webhook retries never create duplicate messages.
-  const existing = await db
-    .prepare(`SELECT id, thread_id FROM messages WHERE resend_email_id = ?`)
-    .bind(webhookData.email_id)
-    .first<{ id: string; thread_id: string }>();
+  // Determine recipient address and enforce catch-all + configured multi-domain rules.
+  const settings = await getSettings(db, envMailDomain);
+  const candidates = [...normalized.toList, ...normalized.ccList].filter(Boolean);
 
-  if (existing) {
-    return {
-      created: false,
-      ignored: false,
-      threadId: existing.thread_id,
-      messageId: existing.id,
-    };
-  }
-
-  // Fetch full body/headers from Resend Receiving API when available; fall back to webhook payload.
-  let receivedDetail: Partial<InboundWebhookData> = {};
-  try {
-    receivedDetail = await resendClient.getReceivedEmail(webhookData.email_id);
-  } catch (err) {
-    // Only fail if neither the webhook nor the receiving API provided body/headers.
-    if (webhookData.text === undefined && webhookData.html === undefined) {
-      throw err;
-    }
-  }
-
-  const rawFrom = receivedDetail.from || webhookData.from;
-  const parsedFrom = parseEmailAddress(rawFrom);
-  const toList = (receivedDetail.to ?? webhookData.to ?? []).map(
-    (addr) => parseEmailAddress(addr).email,
-  );
-  const ccList = (receivedDetail.cc ?? webhookData.cc ?? []).map(
-    (addr) => parseEmailAddress(addr).email,
-  );
-  const bccList = (receivedDetail.bcc ?? webhookData.bcc ?? []).map(
-    (addr) => parseEmailAddress(addr).email,
-  );
-
-  // Determine recipient address and enforce catch-all setting if disabled.
-  const settings = await getSettings(db);
-  let matchedRecipient = toList[0] ?? "";
+  let matchedRecipient = candidates[0] ?? "";
   let matchedConfiguredAddress = false;
-  for (const candidate of [...toList, ...ccList]) {
+  for (const candidate of candidates) {
     const found = await findAddressByEmail(db, candidate);
     if (found && found.isActive) {
       matchedRecipient = found.email;
@@ -400,52 +408,52 @@ export async function ingestInboundEmail(
     }
   }
 
-  if (!settings.catchAllEnabled && !matchedConfiguredAddress) {
-    return {
-      created: false,
-      ignored: true,
-      ignoreReason: "Recipient does not match any active configured address and catch-all is disabled",
-    };
+  if (!matchedConfiguredAddress) {
+    if (!settings.catchAllEnabled) {
+      return {
+        created: false,
+        ignored: true,
+        ignoreReason: "Recipient does not match any active configured address and catch-all is disabled",
+      };
+    }
+    if (settings.mailDomains.length > 0 && candidates.length > 0) {
+      const domainSet = new Set(settings.mailDomains.map((d) => d.toLowerCase()));
+      const matchingDomainCandidate = candidates.find((addr) =>
+        domainSet.has((addr.split("@")[1] ?? "").toLowerCase()),
+      );
+      if (!matchingDomainCandidate) {
+        return {
+          created: false,
+          ignored: true,
+          ignoreReason: "Recipient domain does not match configured catch-all domains",
+        };
+      }
+      matchedRecipient = matchingDomainCandidate;
+    }
   }
 
-  const subject = (receivedDetail.subject ?? webhookData.subject ?? "(no subject)").trim() || "(no subject)";
-  const textBody = receivedDetail.text ?? webhookData.text ?? "";
-  const htmlBody = receivedDetail.html ?? webhookData.html ?? "";
-  const normalizedHeaders = normalizeHeaders(receivedDetail.headers ?? webhookData.headers);
-  const rfcMessageId =
-    receivedDetail.message_id ||
-    webhookData.message_id ||
-    normalizedHeaders["message-id"] ||
-    `<${webhookData.email_id}@resend.inbound>`;
-  const inReplyTo = normalizedHeaders["in-reply-to"] ?? null;
-  const referencesHeader = normalizedHeaders["references"] ?? null;
-  const replyToHeader = normalizedHeaders["reply-to"]
-    ? parseEmailAddress(normalizedHeaders["reply-to"]).email
-    : null;
-
   const allParticipants = Array.from(
-    new Set([parsedFrom.email, ...toList, ...ccList].filter(Boolean)),
+    new Set([normalized.parsedFrom.email, ...normalized.toList, ...normalized.ccList].filter(Boolean)),
   );
   const ownedAddresses = await listAddresses(db);
   const ownedSet = new Set<string>([
     ...ownedAddresses.map((a) => a.email.toLowerCase()),
-    ...toList.map((e) => e.toLowerCase()),
+    ...normalized.toList.map((e) => e.toLowerCase()),
     matchedRecipient.toLowerCase(),
   ]);
   const externalParticipants = allParticipants.filter((p) => !ownedSet.has(p.toLowerCase()));
 
   const { threadId, isNew } = await resolveThreadId(db, {
-    inReplyTo,
-    referencesHeader,
-    subject,
+    inReplyTo: normalized.inReplyTo,
+    referencesHeader: normalized.referencesHeader,
+    subject: normalized.subject,
     recipientAddress: matchedRecipient,
     externalParticipants,
   });
 
   const now = new Date().toISOString();
-  const messageTimestamp = receivedDetail.created_at || webhookData.created_at || now;
   const messageId = crypto.randomUUID();
-  const snippet = createSnippet(textBody, htmlBody);
+  const snippet = createSnippet(normalized.textBody, normalized.htmlBody);
 
   if (isNew) {
     await db
@@ -457,11 +465,11 @@ export async function ingestInboundEmail(
       )
       .bind(
         threadId,
-        subject,
+        normalized.subject,
         snippet,
         JSON.stringify(allParticipants),
         matchedRecipient,
-        messageTimestamp,
+        normalized.messageTimestamp,
         now,
         now,
       )
@@ -501,7 +509,7 @@ export async function ingestInboundEmail(
         snippet,
         JSON.stringify(mergedParticipants),
         existingThread?.recipient_address || matchedRecipient,
-        messageTimestamp,
+        normalized.messageTimestamp,
         now,
         threadId,
       )
@@ -521,28 +529,27 @@ export async function ingestInboundEmail(
     .bind(
       messageId,
       threadId,
-      webhookData.email_id,
-      rfcMessageId,
-      inReplyTo,
-      referencesHeader,
-      parsedFrom.email,
-      parsedFrom.name,
-      JSON.stringify(toList),
-      JSON.stringify(ccList),
-      JSON.stringify(bccList),
-      replyToHeader,
-      subject,
-      textBody,
-      htmlBody,
-      JSON.stringify(normalizedHeaders),
-      messageTimestamp,
+      normalized.providerMessageId,
+      normalized.rfcMessageId,
+      normalized.inReplyTo,
+      normalized.referencesHeader,
+      normalized.parsedFrom.email,
+      normalized.parsedFrom.name,
+      JSON.stringify(normalized.toList),
+      JSON.stringify(normalized.ccList),
+      JSON.stringify(normalized.bccList),
+      normalized.replyToHeader,
+      normalized.subject,
+      normalized.textBody,
+      normalized.htmlBody,
+      JSON.stringify(normalized.normalizedHeaders),
+      normalized.messageTimestamp,
       now,
     )
     .run();
 
-  const attachmentMeta = receivedDetail.attachments ?? webhookData.attachments ?? [];
-  if (attachmentMeta.length > 0) {
-    await ingestResendAttachments(db, r2, resendClient, messageId, webhookData.email_id, attachmentMeta);
+  if (saveAttachments) {
+    await saveAttachments(messageId);
   }
 
   return {
@@ -551,6 +558,177 @@ export async function ingestInboundEmail(
     threadId,
     messageId,
   };
+}
+
+/**
+ * Ingests an inbound email directly from parsed MIME content (e.g., Cloudflare Email Routing
+ * `email()` Worker handler + `postal-mime`), enforcing idempotency and multi-domain catch-all rules.
+ */
+export async function ingestDirectInboundEmail(
+  db: D1Database,
+  r2: R2Bucket,
+  input: DirectInboundEmailInput,
+): Promise<IngestInboundResult> {
+  const existing = await db
+    .prepare(`SELECT id, thread_id FROM messages WHERE resend_email_id = ?`)
+    .bind(input.providerMessageId)
+    .first<{ id: string; thread_id: string }>();
+
+  if (existing) {
+    return {
+      created: false,
+      ignored: false,
+      threadId: existing.thread_id,
+      messageId: existing.id,
+    };
+  }
+
+  const normalizedHeaders = normalizeHeaders(input.headers);
+  const parsedFrom = parseEmailAddress(input.fromAddress);
+  const fromEmail = parsedFrom.email;
+  const fromName = input.fromName?.trim() || parsedFrom.name;
+  const rfcMessageId =
+    input.rfcMessageId?.trim() ||
+    normalizedHeaders["message-id"] ||
+    `<${input.providerMessageId}@cloudflare.inbound>`;
+  const replyToHeader = input.replyTo
+    ? parseEmailAddress(input.replyTo).email
+    : normalizedHeaders["reply-to"]
+      ? parseEmailAddress(normalizedHeaders["reply-to"]).email
+      : null;
+
+  const attachments = input.attachments ?? [];
+
+  return persistNormalizedInboundEmail(
+    db,
+    {
+      providerMessageId: input.providerMessageId,
+      parsedFrom: { email: fromEmail, name: fromName },
+      toList: input.toAddresses.map((e) => parseEmailAddress(e).email).filter(Boolean),
+      ccList: (input.ccAddresses ?? []).map((e) => parseEmailAddress(e).email).filter(Boolean),
+      bccList: (input.bccAddresses ?? []).map((e) => parseEmailAddress(e).email).filter(Boolean),
+      replyToHeader,
+      subject: (input.subject ?? "(no subject)").trim() || "(no subject)",
+      textBody: input.textBody ?? "",
+      htmlBody: input.htmlBody ?? "",
+      normalizedHeaders,
+      rfcMessageId,
+      inReplyTo: normalizedHeaders["in-reply-to"] ?? null,
+      referencesHeader: normalizedHeaders["references"] ?? null,
+      messageTimestamp: input.createdAt || new Date().toISOString(),
+    },
+    input.envMailDomain ?? "",
+    attachments.length > 0
+      ? async (messageId) => {
+          for (const att of attachments) {
+            await storeAttachment(db, r2, {
+              messageId,
+              filename: att.filename || "attachment.bin",
+              contentType: att.contentType || "application/octet-stream",
+              sizeBytes: att.data.byteLength,
+              body: att.data,
+              contentDisposition: att.contentDisposition || "attachment",
+              contentId: att.contentId ?? null,
+            });
+          }
+        }
+      : undefined,
+  );
+}
+
+/**
+ * Ingests an inbound `email.received` Resend webhook idempotently, fetching full email content
+ * via Resend Receiving API, checking catch-all vs. configured addresses, creating/updating the
+ * conversation thread, and streaming attachments into R2.
+ */
+export async function ingestInboundEmail(
+  db: D1Database,
+  r2: R2Bucket,
+  resendClient: ResendClient,
+  webhookData: InboundWebhookData,
+  envMailDomain = "",
+): Promise<IngestInboundResult> {
+  // Idempotency guard so webhook retries never create duplicate messages or refetch from Resend.
+  const existing = await db
+    .prepare(`SELECT id, thread_id FROM messages WHERE resend_email_id = ?`)
+    .bind(webhookData.email_id)
+    .first<{ id: string; thread_id: string }>();
+
+  if (existing) {
+    return {
+      created: false,
+      ignored: false,
+      threadId: existing.thread_id,
+      messageId: existing.id,
+    };
+  }
+
+  // Fetch full body/headers from Resend Receiving API when available; fall back to webhook payload.
+  let receivedDetail: Partial<InboundWebhookData> = {};
+  try {
+    receivedDetail = await resendClient.getReceivedEmail(webhookData.email_id);
+  } catch (err) {
+    // Only fail if neither the webhook nor the receiving API provided body/headers.
+    if (webhookData.text === undefined && webhookData.html === undefined) {
+      throw err;
+    }
+  }
+
+  const rawFrom = receivedDetail.from || webhookData.from;
+  const parsedFrom = parseEmailAddress(rawFrom);
+  const toList = (receivedDetail.to ?? webhookData.to ?? []).map(
+    (addr) => parseEmailAddress(addr).email,
+  );
+  const ccList = (receivedDetail.cc ?? webhookData.cc ?? []).map(
+    (addr) => parseEmailAddress(addr).email,
+  );
+  const bccList = (receivedDetail.bcc ?? webhookData.bcc ?? []).map(
+    (addr) => parseEmailAddress(addr).email,
+  );
+
+  const normalizedHeaders = normalizeHeaders(receivedDetail.headers ?? webhookData.headers);
+  const rfcMessageId =
+    receivedDetail.message_id ||
+    webhookData.message_id ||
+    normalizedHeaders["message-id"] ||
+    `<${webhookData.email_id}@resend.inbound>`;
+  const replyToHeader = normalizedHeaders["reply-to"]
+    ? parseEmailAddress(normalizedHeaders["reply-to"]).email
+    : null;
+  const attachmentMeta = receivedDetail.attachments ?? webhookData.attachments ?? [];
+
+  return persistNormalizedInboundEmail(
+    db,
+    {
+      providerMessageId: webhookData.email_id,
+      parsedFrom,
+      toList,
+      ccList,
+      bccList,
+      replyToHeader,
+      subject:
+        (receivedDetail.subject ?? webhookData.subject ?? "(no subject)").trim() || "(no subject)",
+      textBody: receivedDetail.text ?? webhookData.text ?? "",
+      htmlBody: receivedDetail.html ?? webhookData.html ?? "",
+      normalizedHeaders,
+      rfcMessageId,
+      inReplyTo: normalizedHeaders["in-reply-to"] ?? null,
+      referencesHeader: normalizedHeaders["references"] ?? null,
+      messageTimestamp: receivedDetail.created_at || webhookData.created_at || new Date().toISOString(),
+    },
+    envMailDomain,
+    attachmentMeta.length > 0
+      ? (messageId) =>
+          ingestResendAttachments(
+            db,
+            r2,
+            resendClient,
+            messageId,
+            webhookData.email_id,
+            attachmentMeta,
+          ).then(() => undefined)
+      : undefined,
+  );
 }
 
 function escapeHtmlForEmail(text: string): string {
@@ -589,7 +767,41 @@ function appendHiddenResendTrackingLink(
 }
 
 /**
- * Applies Resend outbound delivery lifecycle and engagement webhook events (`email.sent`,
+ * Records an `email.opened` or `email.clicked` engagement event by local `messages.id`
+ * for self-hosted HMAC-signed tracking endpoints without modifying message delivery status.
+ */
+export async function recordEngagementByMessageId(
+  db: D1Database,
+  messageId: string,
+  eventType: "email.opened" | "email.clicked",
+  detail?: string,
+  timestamp?: string,
+): Promise<{ updated: boolean }> {
+  const row = await db
+    .prepare(`SELECT id, delivery_events_json FROM messages WHERE id = ?`)
+    .bind(messageId)
+    .first<{ id: string; delivery_events_json: string }>();
+  if (!row) {
+    return { updated: false };
+  }
+
+  const events = safeJsonParse<DeliveryEvent[]>(row.delivery_events_json, []);
+  events.push({
+    type: eventType,
+    timestamp: timestamp || new Date().toISOString(),
+    ...(detail ? { detail } : {}),
+  });
+
+  await db
+    .prepare(`UPDATE messages SET delivery_events_json = ?, updated_at = ? WHERE id = ?`)
+    .bind(JSON.stringify(events), new Date().toISOString(), row.id)
+    .run();
+
+  return { updated: true };
+}
+
+/**
+ * Applies outbound delivery lifecycle and engagement webhook/queue events (`email.sent`,
  * `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`,
  * `email.opened`, `email.clicked`) onto the matching message row.
  */
@@ -721,10 +933,15 @@ async function resolveSenderAddress(
     if (configured && configured.isActive) {
       return { email: configured.email, displayName: configured.displayName };
     }
-    // Allow sending from any address on the configured domain when catch-all is enabled.
+    // Allow sending from any address on any configured domain when catch-all is enabled.
     const settings = await getSettings(db);
     const domain = input.fromAddress.split("@")[1]?.toLowerCase() ?? "";
-    if (settings.catchAllEnabled && settings.mailDomain && domain === settings.mailDomain) {
+    const configuredDomains = settings.mailDomains.length > 0
+      ? settings.mailDomains
+      : settings.mailDomain
+        ? [settings.mailDomain]
+        : [];
+    if (settings.catchAllEnabled && domain && configuredDomains.includes(domain)) {
       return { email: input.fromAddress.toLowerCase(), displayName: "" };
     }
     throw new Error(`Sender address ${input.fromAddress} is not configured in Addresses`);
@@ -742,14 +959,16 @@ async function resolveSenderAddress(
 }
 
 /**
- * Creates a draft, queues a `pending_approval` message, or immediately sends an email via Resend.
+ * Creates a draft, queues a `pending_approval` message, or immediately sends an email via the
+ * configured `MailTransport` (`resend`, `cloudflare`, or `ses`).
  */
 export async function sendOrDraftEmail(
   db: D1Database,
   r2: R2Bucket,
-  resendClient: ResendClient,
+  transport: MailTransport,
   input: SendOrDraftInput,
   actor: ActorContext,
+  trackingConfig?: SelfHostedTrackingConfig,
 ): Promise<{ message: MessageRecord; threadId: string }> {
   const sender = await resolveSenderAddress(db, {
     fromAddressId: input.fromAddressId,
@@ -923,7 +1142,7 @@ export async function sendOrDraftEmail(
   }
 
   if (input.mode === "send") {
-    await dispatchMessageViaResend(db, r2, resendClient, messageId);
+    await dispatchMessageViaTransport(db, r2, transport, messageId, trackingConfig);
   }
 
   const detail = await getMessageById(db, messageId);
@@ -934,14 +1153,15 @@ export async function sendOrDraftEmail(
 }
 
 /**
- * Dispatches an existing draft or pending-approval message through Resend and records
- * the resulting `resend_email_id` or delivery failure.
+ * Dispatches an existing draft or pending-approval message through the configured `MailTransport`
+ * (`resend`, `cloudflare`, or `ses`) and records the provider message ID or failure.
  */
-async function dispatchMessageViaResend(
+async function dispatchMessageViaTransport(
   db: D1Database,
   r2: R2Bucket,
-  resendClient: ResendClient,
+  transport: MailTransport,
   messageId: string,
+  trackingConfig?: SelfHostedTrackingConfig,
 ): Promise<void> {
   const row = await db
     .prepare(`SELECT * FROM messages WHERE id = ?`)
@@ -965,15 +1185,23 @@ async function dispatchMessageViaResend(
 
   let outboundHtml = row.html_body;
   if (parsedHeaders["x-postlet-track"] === "true") {
-    const senderDomain = row.from_address.split("@")[1]?.trim() ?? "";
-    if (senderDomain && !/[\s"<>]/.test(senderDomain)) {
-      const trackingUrl = `https://${senderDomain}`;
-      outboundHtml = appendHiddenResendTrackingLink(row.html_body, row.text_body, trackingUrl);
+    if (trackingConfig?.baseUrl && trackingConfig?.secret) {
+      outboundHtml = await instrumentHtmlWithSelfHostedTracking(row.html_body, row.text_body, {
+        messageId,
+        baseUrl: trackingConfig.baseUrl,
+        secret: trackingConfig.secret,
+      });
+    } else if (!transport.provider || transport.provider === "resend") {
+      const senderDomain = row.from_address.split("@")[1]?.trim() ?? "";
+      if (senderDomain && !/[\s"<>]/.test(senderDomain)) {
+        const trackingUrl = `https://${senderDomain}`;
+        outboundHtml = appendHiddenResendTrackingLink(row.html_body, row.text_body, trackingUrl);
+      }
     }
   }
 
   try {
-    const sent = await resendClient.sendEmail({
+    const sent = await transport.sendEmail({
       from: formattedFrom,
       to: safeJsonParse<string[]>(row.to_addresses_json, []),
       cc: safeJsonParse<string[]>(row.cc_addresses_json, []),
@@ -988,16 +1216,28 @@ async function dispatchMessageViaResend(
 
     const now = new Date().toISOString();
     const events = safeJsonParse<DeliveryEvent[]>(row.delivery_events_json, []);
-    events.push({ type: "email.sent", timestamp: now });
+    const initialStatus = sent.initialStatus ?? "sent";
+    events.push({
+      type: initialStatus === "delivered" ? "email.delivered" : initialStatus === "bounced" ? "email.bounced" : "email.sent",
+      timestamp: now,
+      ...(sent.deliveryError ? { detail: sent.deliveryError } : {}),
+    });
 
     await db
       .prepare(
         `UPDATE messages
-         SET resend_email_id = ?, status = 'sent', folder = 'sent', delivery_error = NULL,
+         SET resend_email_id = ?, status = ?, folder = 'sent', delivery_error = ?,
              delivery_events_json = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .bind(sent.id, JSON.stringify(events), now, messageId)
+      .bind(
+        sent.id,
+        initialStatus,
+        sent.deliveryError ?? null,
+        JSON.stringify(events),
+        now,
+        messageId,
+      )
       .run();
 
     // If the thread was sitting in drafts or pending_approval as a standalone compose, move it to sent.
@@ -1008,7 +1248,7 @@ async function dispatchMessageViaResend(
       .bind(now, row.thread_id)
       .run();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to send via Resend";
+    const msg = err instanceof Error ? err.message : "Failed to send email";
     await db
       .prepare(`UPDATE messages SET status = 'failed', delivery_error = ?, updated_at = ? WHERE id = ?`)
       .bind(msg, new Date().toISOString(), messageId)
@@ -1018,12 +1258,13 @@ async function dispatchMessageViaResend(
 }
 
 /**
- * Approves a `pending_approval` message (optionally applying owner edits) and sends it via Resend.
+ * Approves a `pending_approval` message (optionally applying owner edits) and sends it via the
+ * configured `MailTransport`.
  */
 export async function approvePendingMessage(
   db: D1Database,
   r2: R2Bucket,
-  resendClient: ResendClient,
+  transport: MailTransport,
   messageId: string,
   edits?: {
     to?: string[];
@@ -1033,6 +1274,7 @@ export async function approvePendingMessage(
     textBody?: string;
     htmlBody?: string;
   },
+  trackingConfig?: SelfHostedTrackingConfig,
 ): Promise<MessageRecord> {
   const existing = await db
     .prepare(`SELECT * FROM messages WHERE id = ?`)
@@ -1071,7 +1313,7 @@ export async function approvePendingMessage(
       .run();
   }
 
-  await dispatchMessageViaResend(db, r2, resendClient, messageId);
+  await dispatchMessageViaTransport(db, r2, transport, messageId, trackingConfig);
   const updated = await getMessageById(db, messageId);
   if (!updated) {
     throw new Error("Message disappeared after approval");
@@ -1115,9 +1357,10 @@ export interface UpdateDraftInput {
 export async function updateDraftMessage(
   db: D1Database,
   r2: R2Bucket,
-  resendClient: ResendClient,
+  transport: MailTransport,
   messageId: string,
   input: UpdateDraftInput,
+  trackingConfig?: SelfHostedTrackingConfig,
 ): Promise<{ message: MessageRecord; threadId: string }> {
   const existing = await db
     .prepare(`SELECT * FROM messages WHERE id = ?`)
@@ -1258,7 +1501,7 @@ export async function updateDraftMessage(
   }
 
   if (input.mode === "send") {
-    await dispatchMessageViaResend(db, r2, resendClient, messageId);
+    await dispatchMessageViaTransport(db, r2, transport, messageId, trackingConfig);
   }
 
   const updated = await getMessageById(db, messageId);
@@ -1355,6 +1598,7 @@ export async function getMessageById(
 export interface ListThreadsQuery {
   folder?: FolderName;
   address?: string;
+  domain?: string;
   unreadOnly?: boolean;
   priority?: AiPriority;
   category?: AiCategory;
@@ -1366,7 +1610,7 @@ export interface ListThreadsQuery {
 }
 
 /**
- * Lists conversation threads matching folder, address, AI triage, or FTS5 search filters.
+ * Lists conversation threads matching folder, address, domain, AI triage, or FTS5 search filters.
  */
 export async function listThreads(
   db: D1Database,
@@ -1381,6 +1625,14 @@ export async function listThreads(
   } else if (query.address) {
     clauses.push(`lower(t.recipient_address) = ?`);
     bindings.push(query.address.toLowerCase());
+  } else if (query.domain) {
+    const cleanDomain = query.domain.trim().replace(/^@+/, "").toLowerCase();
+    if (cleanDomain) {
+      clauses.push(
+        `instr(t.recipient_address, '@') > 0 AND lower(substr(t.recipient_address, instr(t.recipient_address, '@') + 1)) = ?`,
+      );
+      bindings.push(cleanDomain);
+    }
   }
 
   if (query.folder) {
@@ -1635,4 +1887,27 @@ export async function getFolderCounts(db: D1Database): Promise<FolderCounts> {
     archive: row?.archive ?? 0,
     trash: row?.trash ?? 0,
   };
+}
+
+/**
+ * Computes unread Inbox thread counts grouped by recipient domain for multi-domain sidebar badges.
+ */
+export async function getDomainUnreadCounts(db: D1Database): Promise<Record<string, number>> {
+  const { results } = await db
+    .prepare(
+      `SELECT lower(substr(recipient_address, instr(recipient_address, '@') + 1)) AS domain,
+              SUM(CASE WHEN unread_count > 0 THEN 1 ELSE 0 END) AS unread_threads
+       FROM threads
+       WHERE folder = 'inbox' AND unread_count > 0 AND instr(recipient_address, '@') > 0
+       GROUP BY domain`,
+    )
+    .all<{ domain: string; unread_threads: number }>();
+
+  const counts: Record<string, number> = {};
+  for (const row of results ?? []) {
+    if (row.domain) {
+      counts[row.domain] = Number(row.unread_threads ?? 0);
+    }
+  }
+  return counts;
 }

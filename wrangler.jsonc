@@ -7,7 +7,7 @@
   "keep_vars": true,
   "assets": {
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp"]
+    "run_worker_first": ["/api/*", "/mcp", "/t/*"]
   },
   "observability": {
     "enabled": true,
@@ -41,7 +41,8 @@
   },
   "vars": {
     "APP_NAME": "Postlet",
-    "APP_VERSION": "0.4.0",
-    "DEFAULT_AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"
+    "APP_VERSION": "0.5.0",
+    "DEFAULT_AI_MODEL": "@cf/meta/llama-3.2-3b-instruct",
+    "MAIL_PROVIDER": "resend"
   }
 }
