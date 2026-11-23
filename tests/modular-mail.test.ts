@@ -213,20 +213,20 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
 
   it("ingests free Cloudflare Email Routing streams via postal-mime, saves R2 attachments, threads replies, and enforces multi-domain catch-all", async () => {
     await updateSettings(env.DB, {
-      mailDomains: ["phnxlabs.dev", "other.example"],
+      mailDomains: ["primary.example", "other.example"],
       catchAllEnabled: true,
     });
-    const testEnv = buildTestEnv({ MAIL_DOMAIN: "phnxlabs.dev,other.example" });
+    const testEnv = buildTestEnv({ MAIL_DOMAIN: "primary.example,other.example" });
     const attachmentBytes = textEncoder.encode("Quarter summary attachment body.");
 
     // 1. Primary domain inbound with multipart HTML + base64 attachment through worker.email()
     const msg1 = createMockForwardableEmail({
       from: "Alice Sender <alice@client.org>",
-      to: "hello@phnxlabs.dev",
+      to: "hello@primary.example",
       subject: "Project Kickoff",
       messageId: "<kickoff-1@client.org>",
-      text: "Hello PhnxLabs team!",
-      html: "<p>Hello <strong>PhnxLabs</strong> team!</p>",
+      text: "Hello PrimaryTeam team!",
+      html: "<p>Hello <strong>PrimaryTeam</strong> team!</p>",
       attachment: {
         filename: "report.txt",
         contentType: "text/plain",
@@ -253,7 +253,7 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
     // 2. Duplicate delivery is idempotent
     const dupMsg = createMockForwardableEmail({
       from: "Alice Sender <alice@client.org>",
-      to: "hello@phnxlabs.dev",
+      to: "hello@primary.example",
       subject: "Project Kickoff",
       messageId: "<kickoff-1@client.org>",
     });
@@ -268,7 +268,7 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
     // 3. Reply matching In-Reply-To threads cleanly into existing thread
     const replyMsg = createMockForwardableEmail({
       from: "Alice Sender <alice@client.org>",
-      to: "hello@phnxlabs.dev",
+      to: "hello@primary.example",
       subject: "Re: Project Kickoff",
       messageId: "<kickoff-2@client.org>",
       inReplyTo: "<kickoff-1@client.org>",
@@ -301,11 +301,11 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
 
   it("supports unified and domain-scoped inboxes, domain unread counts, and multi-domain loop protection", async () => {
     await updateSettings(env.DB, {
-      mailDomains: ["phnxlabs.dev", "other.example"],
+      mailDomains: ["primary.example", "other.example"],
       catchAllEnabled: true,
     });
     const testEnv = buildTestEnv({
-      MAIL_DOMAIN: "phnxlabs.dev,other.example",
+      MAIL_DOMAIN: "primary.example,other.example",
       TRACKING_BASE_URL: "https://mail.example.com",
       TRACKING_SECRET: "tracking-secret-1",
     });
@@ -314,9 +314,9 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
     await handleCloudflareInboundEmail(
       createMockForwardableEmail({
         from: "Human <client@partner.io>",
-        to: "support@phnxlabs.dev",
-        subject: "PhnxLabs inquiry",
-        messageId: "<m-phnx-1@partner.io>",
+        to: "support@primary.example",
+        subject: "PrimaryTeam inquiry",
+        messageId: "<m-primary-1@partner.io>",
       }),
       testEnv,
       ctx,
@@ -336,9 +336,9 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
     const unified = await listThreads(env.DB, { folder: "inbox" });
     expect(unified).toHaveLength(2);
 
-    const phnxOnly = await listThreads(env.DB, { folder: "inbox", domain: "phnxlabs.dev" });
-    expect(phnxOnly).toHaveLength(1);
-    expect(phnxOnly[0].recipientAddress).toBe("support@phnxlabs.dev");
+    const primaryOnly = await listThreads(env.DB, { folder: "inbox", domain: "primary.example" });
+    expect(primaryOnly).toHaveLength(1);
+    expect(primaryOnly[0].recipientAddress).toBe("support@primary.example");
 
     const app = createApp();
     const otherRes = await app.fetch(
@@ -353,7 +353,7 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
     // Per-domain unread counts + /api/admin/meta telemetry
     const domainCounts = await getDomainUnreadCounts(env.DB);
     expect(domainCounts).toEqual({
-      "phnxlabs.dev": 1,
+      "primary.example": 1,
       "other.example": 1,
     });
 
@@ -363,18 +363,18 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
     expect(meta.mailProvider).toBe("resend");
     expect(meta.selfHostedTrackingEnabled).toBe(true);
     expect(meta.domainUnreadCounts).toEqual({
-      "phnxlabs.dev": 1,
+      "primary.example": 1,
       "other.example": 1,
     });
 
     // Multi-domain RFC 3834 loop protection blocks any owned domain but allows external senders
-    const phnxDetail = await getThreadDetail(env.DB, phnxOnly[0].id);
-    const externalMsg = phnxDetail!.messages[0];
-    expect(await checkAutoReplySafety(env.DB, externalMsg, ["phnxlabs.dev", "other.example"])).toBeNull();
+    const primaryDetail = await getThreadDetail(env.DB, primaryOnly[0].id);
+    const externalMsg = primaryDetail!.messages[0];
+    expect(await checkAutoReplySafety(env.DB, externalMsg, ["primary.example", "other.example"])).toBeNull();
 
     const sameDomainMsg = { ...externalMsg, fromAddress: "bot@other.example" };
     expect(
-      await checkAutoReplySafety(env.DB, sameDomainMsg, ["phnxlabs.dev", "other.example"]),
+      await checkAutoReplySafety(env.DB, sameDomainMsg, ["primary.example", "other.example"]),
     ).toContain("local mail domain");
   });
 
@@ -639,7 +639,7 @@ describe("Modular Mail Transports, Free Cloudflare Inbound, Multi-Domain & Track
       {
         eventType: "Click",
         mail: { messageId: "ses_out_1", timestamp: "2026-11-22T21:01:00.000Z" },
-        click: { link: "https://phnxlabs.dev", timestamp: "2026-11-22T21:03:00.000Z" },
+        click: { link: "https://primary.example", timestamp: "2026-11-22T21:03:00.000Z" },
       },
     ]) {
       const signed = await signEnvelope({

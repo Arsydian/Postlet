@@ -32,7 +32,7 @@ CF_ACCESS_AUD=your-cloudflare-access-aud-tag
 # CF_ACCESS_SERVICE_TOKEN_IDS=your-service-token-client-id.access
 # POSTLET_SERVICE_AUTH_SECRET=replace-with-shared-service-secret
 
-# Primary domain(s) (comma-separated for multi-domain catch-all, e.g. phnxlabs.dev, otherdomain.com)
+# Primary domain(s) (comma-separated for multi-domain catch-all, e.g. example.com, otherdomain.com)
 MAIL_DOMAIN=mail.example.com
 
 # Local development ONLY: allows bypassing Zero Trust JWT checks on localhost when CF_ACCESS_AUD is unset.

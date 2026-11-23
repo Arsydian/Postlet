@@ -1,4 +1,4 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.6.0-E05337)
+# Postlet ![Version](https://img.shields.io/badge/version-0.6.1-E05337)
 
 Self-hosted, modular multi-domain email client and AI-agent mail gateway running on **Cloudflare Workers** — pairing **free unlimited inbound** via Cloudflare Email Routing with pluggable outbound transports (**Resend**, **Cloudflare Email Sending**, or **Amazon SES v2**), designed to deploy directly from GitHub and run comfortably inside Cloudflare's Free Tier for personal mailbots or scale cleanly on Paid plans for transactional workloads.
 
@@ -176,7 +176,7 @@ Works with **any** outbound provider (`resend`, `cloudflare`, or `ses`) when bot
 1. For each domain you own on Cloudflare (**Dashboard → Domain → Email → Email Routing**):
    - Enable Email Routing (Cloudflare automatically adds free receiving MX & SPF records).
    - Under **Routing rules → Catch-all address**, edit action to **Send to a Worker** and choose your `postlet` Worker (and/or add individual custom addresses pointing to the same `postlet` Worker).
-2. Add all routed domains in Postlet under **Settings → Addresses & Domain** (`Mail Domains`, e.g., `phnxlabs.dev, otherdomain.com`) or via comma-separated `MAIL_DOMAIN`.
+2. Add all routed domains in Postlet under **Settings → Addresses & Domain** (`Mail Domains`, e.g., `example.com, otherdomain.com`) or via comma-separated `MAIL_DOMAIN`.
 3. Note: Even when inbound arrives free via Cloudflare Email Routing (`email()`), leave your DNS DKIM/SPF records configured for your chosen `MAIL_PROVIDER` (`resend`, `cloudflare`, or `ses`) so outbound mail passes DMARC cleanly! *(Using Cloudflare Email Routing MX records for inbound + Resend subdomain `send.yourdomain.com` SPF/DKIM for outbound avoids any MX conflict.)*
 
 ### 5. Configure Cloudflare Zero Trust Access

@@ -335,7 +335,7 @@ export function createMcpRoutes(
           capabilities: { tools: {} },
           serverInfo: {
             name: "postlet-mcp",
-            version: c.env.APP_VERSION || "0.6.0",
+            version: c.env.APP_VERSION || "0.6.1",
           },
         },
       });
