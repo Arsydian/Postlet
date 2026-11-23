@@ -56,14 +56,14 @@ export function createApp(options?: CreateAppOptions) {
     return c.json({
       ok: true,
       service: c.env.APP_NAME || "Postlet",
-      version: c.env.APP_VERSION || "0.5.1",
+      version: c.env.APP_VERSION || "0.6.0",
     });
   });
 
   app.route("/t", createTrackingRoutes());
   app.route("/api/webhooks", createWebhookRoutes(options?.resendFetchFn));
-  app.route("/mcp", createMcpRoutes(options?.resendFetchFn));
-  app.route("/api/v1", createAgentV1Routes(options?.resendFetchFn));
+  app.route("/mcp", createMcpRoutes(options));
+  app.route("/api/v1", createAgentV1Routes(options));
   app.route("/api/admin", createAdminRoutes(options));
 
   app.notFound((c) => {

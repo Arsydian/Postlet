@@ -103,7 +103,7 @@ export function createAdminRoutes(options?: {
 
     return c.json({
       appName: c.env.APP_NAME || "Postlet",
-      appVersion: c.env.APP_VERSION || "0.5.1",
+      appVersion: c.env.APP_VERSION || "0.6.0",
       ownerEmail: c.get("ownerEmail") ?? "owner",
       mailProvider: resolveMailProvider(c.env),
       selfHostedTrackingEnabled: isSelfHostedTrackingConfigured(c.env),

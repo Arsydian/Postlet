@@ -235,4 +235,169 @@ describe("Authentication & Scoped Agent Guardrails", () => {
     );
     expect(revokedRes.status).toBe(401);
   });
+
+  it("enforces Cloudflare Access Service Token JWTs (common_name & AUD) and X-Postlet-Service-Secret on /api/v1/* and /mcp", async () => {
+    await createAddress(env.DB, {
+      email: "uptime@mail.example.com",
+      isDefault: true,
+    });
+    const key = await createAgentKey(
+      env.DB,
+      { name: "UptimeFlare", scope: "read_write" },
+      "https://postlet.example.com",
+    );
+
+    const teamDomain = "postlet-team.cloudflareaccess.com";
+    const serviceAud = "aud-service-api-v1";
+    const allowedClientId = "svc-uptimeflare.access";
+
+    const validSvc = await createTestAccessJwtSetup({
+      teamDomain,
+      audience: serviceAud,
+      commonName: allowedClientId,
+    });
+    const wrongClientSvc = await createTestAccessJwtSetup({
+      teamDomain,
+      audience: serviceAud,
+      commonName: "svc-rogue.access",
+    });
+    const wrongAudSvc = await createTestAccessJwtSetup({
+      teamDomain,
+      audience: "aud-other-app",
+      commonName: allowedClientId,
+    });
+
+    const mockResend = createMockResendFetch();
+    const app = createApp({ accessFetchFn: validSvc.jwksFetch, resendFetchFn: mockResend.fetchFn });
+
+    const serviceEnv = buildTestEnv({
+      CF_ACCESS_TEAM_DOMAIN: teamDomain,
+      CF_ACCESS_SERVICE_AUD: serviceAud,
+      CF_ACCESS_SERVICE_TOKEN_IDS: allowedClientId,
+      POSTLET_SERVICE_AUTH_SECRET: "shared-svc-secret-123",
+    });
+
+    // Missing Access JWT -> 401
+    const noJwtRes = await app.fetch(
+      new Request("https://postlet.example.com/api/v1/messages/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "X-Postlet-Service-Secret": "shared-svc-secret-123",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ to: ["ops@example.org"], subject: "Alert", textBody: "Down" }),
+      }),
+      serviceEnv,
+    );
+    expect(noJwtRes.status).toBe(401);
+
+    // Wrong AUD -> 401
+    const appWrongAud = createApp({
+      accessFetchFn: wrongAudSvc.jwksFetch,
+      resendFetchFn: mockResend.fetchFn,
+    });
+    const wrongAudRes = await appWrongAud.fetch(
+      new Request("https://postlet.example.com/api/v1/messages/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "Cf-Access-Jwt-Assertion": wrongAudSvc.token,
+          "X-Postlet-Service-Secret": "shared-svc-secret-123",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ to: ["ops@example.org"], subject: "Alert", textBody: "Down" }),
+      }),
+      serviceEnv,
+    );
+    expect(wrongAudRes.status).toBe(401);
+
+    // Valid signature + AUD, unauthorized common_name -> 403
+    const appWrongClient = createApp({
+      accessFetchFn: wrongClientSvc.jwksFetch,
+      resendFetchFn: mockResend.fetchFn,
+    });
+    const wrongClientRes = await appWrongClient.fetch(
+      new Request("https://postlet.example.com/api/v1/messages/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "Cf-Access-Jwt-Assertion": wrongClientSvc.token,
+          "X-Postlet-Service-Secret": "shared-svc-secret-123",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ to: ["ops@example.org"], subject: "Alert", textBody: "Down" }),
+      }),
+      serviceEnv,
+    );
+    expect(wrongClientRes.status).toBe(403);
+
+    // Valid JWT + wrong/missing shared secret -> 401
+    const badSecretRes = await app.fetch(
+      new Request("https://postlet.example.com/api/v1/messages/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "Cf-Access-Jwt-Assertion": validSvc.token,
+          "X-Postlet-Service-Secret": "wrong-secret",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ to: ["ops@example.org"], subject: "Alert", textBody: "Down" }),
+      }),
+      serviceEnv,
+    );
+    expect(badSecretRes.status).toBe(401);
+
+    // Valid Service Token JWT + valid X-Postlet-Service-Secret + valid Bearer key -> 200 on REST & MCP
+    const okRestRes = await app.fetch(
+      new Request("https://postlet.example.com/api/v1/messages/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "Cf-Access-Jwt-Assertion": validSvc.token,
+          "X-Postlet-Service-Secret": "shared-svc-secret-123",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ to: ["ops@example.org"], subject: "Alert", textBody: "Down" }),
+      }),
+      serviceEnv,
+    );
+    expect(okRestRes.status).toBe(200);
+
+    const okMcpRes = await app.fetch(
+      new Request("https://postlet.example.com/mcp", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "Cf-Access-Jwt-Assertion": validSvc.token,
+          "X-Postlet-Service-Secret": "shared-svc-secret-123",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+      }),
+      serviceEnv,
+    );
+    expect(okMcpRes.status).toBe(200);
+
+    // Shared secret alone without CF_ACCESS_SERVICE_AUD / TOKEN_IDS also works platform-independently
+    const sharedOnlyEnv = buildTestEnv({ POSTLET_SERVICE_AUTH_SECRET: "shared-only-secret" });
+    const sharedMissingRes = await app.fetch(
+      new Request("https://postlet.example.com/api/v1/threads", {
+        headers: { Authorization: `Bearer ${key.plaintextSecret}` },
+      }),
+      sharedOnlyEnv,
+    );
+    expect(sharedMissingRes.status).toBe(401);
+
+    const sharedOkRes = await app.fetch(
+      new Request("https://postlet.example.com/api/v1/threads", {
+        headers: {
+          Authorization: `Bearer ${key.plaintextSecret}`,
+          "X-Postlet-Service-Secret": "shared-only-secret",
+        },
+      }),
+      sharedOnlyEnv,
+    );
+    expect(sharedOkRes.status).toBe(200);
+  });
 });

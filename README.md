@@ -1,4 +1,4 @@
-# Postlet ![Version](https://img.shields.io/badge/version-0.5.1-E05337)
+# Postlet ![Version](https://img.shields.io/badge/version-0.6.0-E05337)
 
 Self-hosted, modular multi-domain email client and AI-agent mail gateway running on **Cloudflare Workers** — pairing **free unlimited inbound** via Cloudflare Email Routing with pluggable outbound transports (**Resend**, **Cloudflare Email Sending**, or **Amazon SES v2**), designed to deploy directly from GitHub and run comfortably inside Cloudflare's Free Tier for personal mailbots or scale cleanly on Paid plans for transactional workloads.
 
@@ -204,7 +204,7 @@ Create separate **Self-hosted** applications only for the machine/tracking paths
 | `mail.yourdomain.com/api/webhooks/resend` | `Bypass` → Include → `Everyone` | **When using Resend** | Resend delivers outbound delivery status webhooks (and optional Resend inbound) here without a browser session. |
 | `mail.yourdomain.com/api/webhooks/ses` | `Bypass` → Include → `Everyone` | **Only if using `MAIL_PROVIDER=ses`** | Amazon SNS posts X.509-signed delivery/bounce/open/click notifications here. |
 | `mail.yourdomain.com/t/*` | `Bypass` → Include → `Everyone` | **Only if using self-hosted tracking** | Lets external email clients load signed `/t/o/:token.gif` open pixels and follow `/t/c/:token` click links without Access login prompts. |
-| `mail.yourdomain.com/api/v1/*` | `Bypass` → `Everyone` *(or `Service Auth`)* | **Only if using REST API / scripts** | Lets external scripts/services call Postlet REST APIs; `/*` covers all sub-routes. |
+| `mail.yourdomain.com/api/v1/*` | `Bypass` → `Everyone` *(or `Service Auth`)* | **Only if using REST API / scripts** | Lets external scripts/services (e.g., UptimeFlare) call Postlet REST APIs; `/*` covers all sub-routes. |
 | `mail.yourdomain.com/mcp` | `Bypass` → `Everyone` *(or `Service Auth`)* | **Only if using external MCP AI agents** | Lets Claude, Cursor, Antigravity, etc. connect via Streamable HTTP MCP. |
 | `mail.yourdomain.com/api/health` | `Bypass` → Include → `Everyone` | **Optional** | Only needed if an external uptime monitor probes `/api/health` without Access auth. |
 
@@ -217,9 +217,15 @@ Setting a sub-path to **Bypass** disables Cloudflare's browser login redirect *o
 | `/api/webhooks/resend` | **Bypass (`Everyone`)** | Verifies Svix **HMAC-SHA256** (`svix-id`, `svix-timestamp`, `svix-signature`) using `RESEND_WEBHOOK_SECRET` with constant-time comparison and a ±5-minute replay window. Unsigned or forged requests receive `401`. |
 | `/api/webhooks/ses` | **Bypass (`Everyone`)** | Verifies `x-postlet-webhook-secret` (when set), `SES_SNS_TOPIC_ARN` allowlist (when set), `https://sns.<region>.amazonaws.com` cert host check, and X.509 PEM **RSA SHA-256** SNS signature before processing. |
 | `/t/*` | **Bypass (`Everyone`)** | Verifies **HMAC-SHA256** token signature against `TRACKING_SECRET` with constant-time comparison and restricts redirect schemes strictly to `http:` / `https:`. |
-| `/api/v1/*` & `/mcp` | **Bypass** *(or `Service Auth`)* | Requires a scoped **`Authorization: Bearer plt_...`** API key (stored as SHA-256 hash in D1) enforcing tier (`read_only` / `read_draft` / `read_write`), optional alias locks, recipient-domain allowlists, hourly rate limits, instant revocation, and full audit logging. |
+| `/api/v1/*` & `/mcp` | **Bypass** *(or `Service Auth`)* | Requires a scoped **`Authorization: Bearer plt_...`** API key (stored as SHA-256 hash in D1), and can additionally enforce **Cloudflare Access Service Token JWTs** (`CF_ACCESS_SERVICE_AUD` + `CF_ACCESS_SERVICE_TOKEN_IDS`) and/or a shared **`X-Postlet-Service-Secret`** (`POSTLET_SERVICE_AUTH_SECRET`). |
 
-*(Optional extra hardening: swap `Bypass` on `/api/v1/*` and `/mcp` for Cloudflare Access `Service Auth` service tokens, or layer a WAF Custom Rule requiring `POST` + `svix-signature` on `/api/webhooks/resend`.)*
+#### 5d. Hardening `/api/v1/*` & `/mcp` with Service Auth (Recommended for UptimeFlare / Machine Clients)
+1. **Cloudflare Zero Trust Edge Service Auth**:
+   - Create a Service Token (`CF-Access-Client-Id` & `CF-Access-Client-Secret`) under **Zero Trust → Access controls → Service Auth → Service Tokens**.
+   - On the `mail.yourdomain.com/api/v1/*` Access application, use **Action**: `Service Auth` | **Include** → **Service Token**.
+   - Copy that sub-path Access application's **AUD tag** into Postlet's `CF_ACCESS_SERVICE_AUD` variable, and optionally set `CF_ACCESS_SERVICE_TOKEN_IDS` to your Service Token's Client ID (`<id>.access`). *(Cloudflare Access strips `CF-Access-Client-Secret` at the edge after validating the token and forwards a signed `Cf-Access-Jwt-Assertion` with `common_name` matching the Client ID, which Postlet cryptographically verifies in the Worker.)*
+2. **Optional Platform-Independent Shared Service Secret**:
+   - Set `POSTLET_SERVICE_AUTH_SECRET` as a Worker Secret on both Postlet and your client (e.g., UptimeFlare) so `/api/v1/*` and `/mcp` also require a matching `X-Postlet-Service-Secret` header in constant time — even in non-Access or local setups.
 
 ### 6. Configure Resend Outbound Domain & Delivery Webhooks *(When `MAIL_PROVIDER=resend`)*
 1. In **Resend Dashboard → Domains**, add and verify outbound DNS records (SPF on `send` subdomain + DKIM) for your domain(s). *(Tip: If Cloudflare Email Routing handles inbound mail on `@yourdomain.com`, you do **not** need Resend's root `@` receiving MX record.)*

@@ -1,6 +1,6 @@
 {
   "name": "postlet",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Cloudflare Worker-hosted email client and AI-agent mail gateway backed by Resend, D1, R2, Zero Trust Access, and Workers AI.",

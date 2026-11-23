@@ -12,7 +12,7 @@ import {
 } from "../../shared/schemas";
 import type { AiCategory, AiPriority } from "../../shared/types";
 import type { PostletEnv, PostletVariables } from "../env";
-import { agentAuthMiddleware, assertAgentScope } from "../middleware/agent-auth";
+import { assertAgentScope, createAgentAuthMiddleware } from "../middleware/agent-auth";
 import { recordAuditLog } from "../middleware/audit";
 import { getDefaultAddress, listAddresses } from "../services/addresses";
 import { hasAllowedFunction, validateAgentSendGuardrails } from "../services/agent-keys";
@@ -38,7 +38,11 @@ import {
 import { getSelfHostedTrackingConfig } from "../services/tracking";
 import { createMailTransport } from "../services/transports";
 
-export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
+export function createAgentV1Routes(
+  options?: typeof fetch | { accessFetchFn?: typeof fetch; resendFetchFn?: typeof fetch },
+) {
+  const accessFetchFn = typeof options === "function" ? undefined : options?.accessFetchFn;
+  const resendFetchFn = typeof options === "function" ? options : options?.resendFetchFn;
   const router = new Hono<{ Bindings: PostletEnv; Variables: PostletVariables }>();
 
   // Public OpenAPI 3.1 discovery schema so AI agents and tooling can inspect endpoints easily.
@@ -48,7 +52,7 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
       openapi: "3.1.0",
       info: {
         title: "Postlet Agent Mail API",
-        version: c.env.APP_VERSION || "0.5.1",
+        version: c.env.APP_VERSION || "0.6.0",
         description:
           "Scoped mail & built-in AI functions API for AI agents. Use read_only, read_draft, or read_write bearer tokens.",
       },
@@ -80,7 +84,7 @@ export function createAgentV1Routes(resendFetchFn?: typeof fetch) {
     });
   });
 
-  router.use("/*", agentAuthMiddleware);
+  router.use("/*", createAgentAuthMiddleware(accessFetchFn));
 
   router.get("/threads", async (c) => {
     const key = c.get("agentKey")!;

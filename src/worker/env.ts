@@ -80,6 +80,12 @@ export interface PostletEnv extends Omit<Env, "AI" | "MAIL_PROVIDER"> {
   CF_ACCESS_TEAM_DOMAIN?: string;
   /** Cloudflare Zero Trust Access application AUD tag. */
   CF_ACCESS_AUD?: string;
+  /** Optional comma-separated Access AUD tag(s) for Service Auth sub-path apps protecting `/api/v1/*` and `/mcp`. */
+  CF_ACCESS_SERVICE_AUD?: string;
+  /** Optional comma-separated allowlist of authorized Service Token Client IDs (`common_name` claim). */
+  CF_ACCESS_SERVICE_TOKEN_IDS?: string;
+  /** Optional shared Service Auth secret validated via `X-Postlet-Service-Secret` on agent endpoints. */
+  POSTLET_SERVICE_AUTH_SECRET?: string;
   /** Primary mail domain(s) (comma-separated fallback before D1 Settings override). */
   MAIL_DOMAIN?: string;
   /** Local-development only Access bypass flag; strictly ignored outside localhost or when AUD is set. */

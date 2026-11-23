@@ -16,7 +16,7 @@ interface AccessJwtHeader {
   typ?: string;
 }
 
-interface AccessJwtPayload {
+export interface AccessJwtPayload {
   aud?: string | string[];
   iss?: string;
   exp?: number;
@@ -24,6 +24,8 @@ interface AccessJwtPayload {
   iat?: number;
   email?: string;
   sub?: string;
+  common_name?: string;
+  type?: string;
 }
 
 interface JwkKey extends JsonWebKey {
@@ -38,7 +40,7 @@ interface JwksResponse {
 
 export interface VerifyAccessJwtOptions {
   teamDomain: string;
-  audience: string;
+  audience: string | string[];
   nowSeconds?: number;
   fetchFn?: typeof fetch;
 }
@@ -119,7 +121,10 @@ export async function verifyCloudflareAccessJwt(
     : payload.aud
       ? [payload.aud]
       : [];
-  if (!audiences.includes(options.audience)) {
+  const expectedAudiences = (Array.isArray(options.audience) ? options.audience : [options.audience])
+    .map((a) => a.trim())
+    .filter(Boolean);
+  if (expectedAudiences.length === 0 || !audiences.some((aud) => expectedAudiences.includes(aud))) {
     throw new Error("JWT audience mismatch");
   }
 

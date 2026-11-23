@@ -20,7 +20,7 @@ import type {
   AppSettings,
 } from "../../shared/types";
 import type { PostletEnv, PostletVariables } from "../env";
-import { agentAuthMiddleware } from "../middleware/agent-auth";
+import { createAgentAuthMiddleware } from "../middleware/agent-auth";
 import { recordAuditLog } from "../middleware/audit";
 import { getDefaultAddress, getSettings, listAddresses } from "../services/addresses";
 import {
@@ -279,7 +279,11 @@ function mcpTextResult(data: unknown, isError = false) {
   };
 }
 
-export function createMcpRoutes(resendFetchFn?: typeof fetch) {
+export function createMcpRoutes(
+  options?: typeof fetch | { accessFetchFn?: typeof fetch; resendFetchFn?: typeof fetch },
+) {
+  const accessFetchFn = typeof options === "function" ? undefined : options?.accessFetchFn;
+  const resendFetchFn = typeof options === "function" ? options : options?.resendFetchFn;
   const router = new Hono<{ Bindings: PostletEnv; Variables: PostletVariables }>();
 
   router.get("/", (c) => {
@@ -291,7 +295,7 @@ export function createMcpRoutes(resendFetchFn?: typeof fetch) {
     });
   });
 
-  router.use("/", agentAuthMiddleware);
+  router.use("/", createAgentAuthMiddleware(accessFetchFn));
 
   router.post("/", async (c) => {
     const key = c.get("agentKey");
@@ -331,7 +335,7 @@ export function createMcpRoutes(resendFetchFn?: typeof fetch) {
           capabilities: { tools: {} },
           serverInfo: {
             name: "postlet-mcp",
-            version: c.env.APP_VERSION || "0.5.1",
+            version: c.env.APP_VERSION || "0.6.0",
           },
         },
       });

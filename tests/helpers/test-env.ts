@@ -114,6 +114,9 @@ export async function createTestAccessJwtSetup(params: {
   teamDomain: string;
   audience: string;
   email?: string;
+  commonName?: string;
+  sub?: string;
+  type?: string;
   expOffsetSeconds?: number;
 }) {
   const keyPair = (await crypto.subtle.generateKey(
@@ -139,16 +142,23 @@ export async function createTestAccessJwtSetup(params: {
 
   const now = Math.floor(Date.now() / 1000);
   const header = encodeBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT", kid }));
-  const payload = encodeBase64Url(
-    JSON.stringify({
-      aud: [params.audience],
-      iss: `https://${params.teamDomain}`,
-      exp: now + (params.expOffsetSeconds ?? 3600),
-      iat: now,
-      email: params.email ?? "owner@example.com",
-      sub: "user-123",
-    }),
-  );
+  const claims: Record<string, unknown> = {
+    aud: [params.audience],
+    iss: `https://${params.teamDomain}`,
+    exp: now + (params.expOffsetSeconds ?? 3600),
+    iat: now,
+    sub: params.sub ?? (params.commonName ? "" : "user-123"),
+  };
+  if (params.commonName) {
+    claims.type = params.type ?? "app";
+    claims.common_name = params.commonName;
+    if (params.email) {
+      claims.email = params.email;
+    }
+  } else {
+    claims.email = params.email ?? "owner@example.com";
+  }
+  const payload = encodeBase64Url(JSON.stringify(claims));
 
   const sigBuf = await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
@@ -268,7 +278,7 @@ export function buildTestEnv(overrides?: Partial<PostletEnv>): PostletEnv {
   return {
     ...base,
     APP_NAME: "Postlet",
-    APP_VERSION: "0.5.1",
+    APP_VERSION: "0.6.0",
     DEFAULT_AI_MODEL: "@cf/meta/llama-3.2-3b-instruct",
     RESEND_API_KEY: "re_test_key",
     RESEND_WEBHOOK_SECRET: `whsec_${btoa("supersecretkey1234567890")}`,
