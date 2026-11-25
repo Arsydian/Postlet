@@ -1595,6 +1595,40 @@ export async function getMessageById(
   return mapMessageRow(row, attachmentMap.get(row.id) ?? []);
 }
 
+/**
+ * Persists a per-message preference allowing or blocking remote external images in HTML bodies
+ * (`x-postlet-allow-images` in `headers_json`), so reopening the thread preserves the choice.
+ */
+export async function setMessageAllowRemoteImages(
+  db: D1Database,
+  messageId: string,
+  allow: boolean,
+): Promise<MessageRecord | null> {
+  const row = await db
+    .prepare(`SELECT id, headers_json FROM messages WHERE id = ?`)
+    .bind(messageId)
+    .first<{ id: string; headers_json: string }>();
+
+  if (!row) {
+    return null;
+  }
+
+  const headers = safeJsonParse<Record<string, string>>(row.headers_json, {});
+  if (allow) {
+    headers["x-postlet-allow-images"] = "true";
+  } else {
+    delete headers["x-postlet-allow-images"];
+  }
+
+  const now = new Date().toISOString();
+  await db
+    .prepare(`UPDATE messages SET headers_json = ?, updated_at = ? WHERE id = ?`)
+    .bind(JSON.stringify(headers), now, messageId)
+    .run();
+
+  return getMessageById(db, messageId);
+}
+
 export interface ListThreadsQuery {
   folder?: FolderName;
   address?: string;

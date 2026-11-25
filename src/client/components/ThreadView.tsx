@@ -21,10 +21,74 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { AppSettings, MessageRecord, ThreadDetail } from "../../shared/types";
-import { buildEmailIframeSrcDoc, hasRemoteImages, sanitizeEmailHtml } from "../lib/sanitize";
+import type {
+  AppSettings,
+  AttachmentRecord,
+  MessageRecord,
+  ThreadDetail,
+} from "../../shared/types";
+import {
+  buildEmailIframeSrcDoc,
+  hasRemoteImages,
+  matchCidAttachments,
+  SAFE_INLINE_IMAGE_MIMES,
+  sanitizeEmailHtml,
+} from "../lib/sanitize";
 import type { ResolvedTheme } from "../lib/theme";
 import { ApprovalBanner } from "./ApprovalBanner";
+
+const MAX_CID_CACHE_ENTRIES = 60;
+const cidDataUriCache = new Map<string, Promise<string | null>>();
+
+function encodeUint8ArrayToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function loadCidAttachmentDataUri(attachment: AttachmentRecord): Promise<string | null> {
+  const cached = cidDataUriCache.get(attachment.id);
+  if (cached) {
+    return cached;
+  }
+
+  if (cidDataUriCache.size >= MAX_CID_CACHE_ENTRIES) {
+    const oldestKey = cidDataUriCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      cidDataUriCache.delete(oldestKey);
+    }
+  }
+
+  const pending = (async (): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/admin/attachments/${encodeURIComponent(attachment.id)}?inline=true`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        cidDataUriCache.delete(attachment.id);
+        return null;
+      }
+      const mime = (res.headers.get("Content-Type") || attachment.contentType || "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+      if (!SAFE_INLINE_IMAGE_MIMES.has(mime)) {
+        return null;
+      }
+      const buf = await res.arrayBuffer();
+      return `data:${mime};base64,${encodeUint8ArrayToBase64(new Uint8Array(buf))}`;
+    } catch {
+      cidDataUriCache.delete(attachment.id);
+      return null;
+    }
+  })();
+
+  cidDataUriCache.set(attachment.id, pending);
+  return pending;
+}
 
 interface ThreadViewProps {
   thread: ThreadDetail | null;
@@ -46,6 +110,8 @@ interface ThreadViewProps {
   onEditDraft: (message: MessageRecord) => void;
   onSendDraft: (message: MessageRecord) => void;
   onDiscardDraft: (message: MessageRecord) => void;
+  onAllowMessageImages: (messageId: string) => void;
+  onTrustSenderImages: (senderEmail: string, messageId: string) => void;
   onOpenAiSettings: () => void;
 }
 
@@ -56,27 +122,42 @@ function formatBytes(bytes: number): string {
 }
 
 function SanitizedEmailFrame({
+  messageId,
+  senderEmail,
   htmlBody,
   textBody,
+  attachments,
   resolvedTheme,
+  persistedAllowImages,
+  isSenderTrusted,
+  onAllowImages,
+  onTrustSender,
 }: {
+  messageId: string;
+  senderEmail: string;
   htmlBody: string;
   textBody: string;
+  attachments: AttachmentRecord[];
   resolvedTheme: ResolvedTheme;
+  persistedAllowImages: boolean;
+  isSenderTrusted: boolean;
+  onAllowImages: () => void;
+  onTrustSender: () => void;
 }) {
   const [srcDoc, setSrcDoc] = useState<string>("");
   const [viewMode, setViewMode] = useState<"html" | "text">(htmlBody ? "html" : "text");
-  const [allowRemoteImages, setAllowRemoteImages] = useState(false);
+  const [localAllowOverride, setLocalAllowOverride] = useState(false);
   const [forceLightPaper, setForceLightPaper] = useState(false);
 
   const remoteImagesPresent = Boolean(htmlBody && hasRemoteImages(htmlBody));
+  const effectiveAllowImages = persistedAllowImages || localAllowOverride;
   const iframeTheme: ResolvedTheme = forceLightPaper ? "light" : resolvedTheme;
 
   useEffect(() => {
-    setAllowRemoteImages(false);
+    setLocalAllowOverride(false);
     setForceLightPaper(false);
     setViewMode(htmlBody ? "html" : "text");
-  }, [htmlBody]);
+  }, [messageId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,15 +165,39 @@ function SanitizedEmailFrame({
       setSrcDoc("");
       return;
     }
-    void sanitizeEmailHtml(htmlBody).then((sanitized) => {
-      if (!cancelled) {
-        setSrcDoc(buildEmailIframeSrcDoc(sanitized, { allowRemoteImages, theme: iframeTheme }));
+
+    const cidMatches = matchCidAttachments(htmlBody, attachments);
+    const loadAll = async () => {
+      const [sanitized, cidEntries] = await Promise.all([
+        sanitizeEmailHtml(htmlBody),
+        Promise.all(
+          cidMatches.map(async ({ cidKey, attachment }) => {
+            const uri = await loadCidAttachmentDataUri(attachment);
+            return uri ? ([cidKey, uri] as const) : null;
+          }),
+        ),
+      ]);
+      if (cancelled) return;
+      const cidDataUris = new Map<string, string>();
+      for (const entry of cidEntries) {
+        if (entry) {
+          cidDataUris.set(entry[0], entry[1]);
+        }
       }
-    });
+      setSrcDoc(
+        buildEmailIframeSrcDoc(sanitized, {
+          allowRemoteImages: effectiveAllowImages,
+          theme: iframeTheme,
+          cidDataUris,
+        }),
+      );
+    };
+
+    void loadAll();
     return () => {
       cancelled = true;
     };
-  }, [htmlBody, allowRemoteImages, iframeTheme]);
+  }, [htmlBody, attachments, effectiveAllowImages, iframeTheme]);
 
   if (!htmlBody && !textBody) {
     return <p className="text-sm italic text-[var(--neu-text-muted)]">(Empty message body)</p>;
@@ -103,16 +208,36 @@ function SanitizedEmailFrame({
       {(remoteImagesPresent || (htmlBody && textBody) || (resolvedTheme === "dark" && htmlBody)) && (
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            {remoteImagesPresent && viewMode === "html" && !allowRemoteImages && (
-              <div className="neu-inset inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] text-[var(--neu-text-secondary)]">
+            {remoteImagesPresent && viewMode === "html" && !effectiveAllowImages && (
+              <div className="neu-inset inline-flex flex-wrap items-center gap-2 rounded-full px-3 py-1 text-[11px] text-[var(--neu-text-secondary)]">
                 <span>Remote images blocked</span>
                 <button
                   type="button"
-                  onClick={() => setAllowRemoteImages(true)}
+                  onClick={() => {
+                    setLocalAllowOverride(true);
+                    onAllowImages();
+                  }}
                   className="font-semibold text-[var(--neu-coral-text)] hover:underline"
                 >
-                  Load images
+                  Allow images
                 </button>
+                {senderEmail && !isSenderTrusted && (
+                  <>
+                    <span className="text-[var(--neu-text-muted)]" aria-hidden="true">
+                      ·
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalAllowOverride(true);
+                        onTrustSender();
+                      }}
+                      className="font-medium text-[var(--neu-text-secondary)] hover:text-[var(--neu-text)] hover:underline"
+                    >
+                      Always allow {senderEmail}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -157,6 +282,7 @@ function SanitizedEmailFrame({
 
       {viewMode === "html" && srcDoc ? (
         <iframe
+          key={`${messageId}-${effectiveAllowImages ? "img-on" : "img-off"}-${iframeTheme}`}
           title="Sanitized email body"
           sandbox="allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
@@ -192,6 +318,8 @@ export function ThreadView({
   onEditDraft,
   onSendDraft,
   onDiscardDraft,
+  onAllowMessageImages,
+  onTrustSenderImages,
   onOpenAiSettings,
 }: ThreadViewProps) {
   if (!thread) {
@@ -394,6 +522,10 @@ export function ThreadView({
           const isDraft = msg.status === "draft";
           const canRetryFailed = msg.status === "failed" && !msg.resendEmailId;
           const isTracked = msg.headers["x-postlet-track"] === "true";
+          const normalizedSender = msg.fromAddress.trim().toLowerCase();
+          const isSenderTrusted = settings.trustedImageSenders.includes(normalizedSender);
+          const persistedAllowImages =
+            msg.headers["x-postlet-allow-images"] === "true" || isSenderTrusted;
 
           return (
             <article
@@ -514,9 +646,16 @@ export function ThreadView({
 
               <div className="mt-3.5">
                 <SanitizedEmailFrame
+                  messageId={msg.id}
+                  senderEmail={normalizedSender}
                   htmlBody={msg.htmlBody}
                   textBody={msg.textBody}
+                  attachments={msg.attachments}
                   resolvedTheme={resolvedTheme}
+                  persistedAllowImages={persistedAllowImages}
+                  isSenderTrusted={isSenderTrusted}
+                  onAllowImages={() => onAllowMessageImages(msg.id)}
+                  onTrustSender={() => onTrustSenderImages(normalizedSender, msg.id)}
                 />
               </div>
 

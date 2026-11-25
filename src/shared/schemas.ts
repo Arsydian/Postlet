@@ -186,6 +186,7 @@ export const updateSettingsSchema = z.object({
   mailDomain: z.string().trim().toLowerCase().max(500).optional(),
   mailDomains: z.array(domainNameSchema).max(30).optional(),
   catchAllEnabled: z.boolean().optional(),
+  trustedImageSenders: z.array(emailSchema).max(500).optional(),
   aiEnabled: z.boolean().optional(),
   aiModel: z.enum(ALLOWED_AI_MODELS).optional(),
   aiDailyCap: z.number().int().min(1).max(2000).optional(),
@@ -198,6 +199,10 @@ export const updateSettingsSchema = z.object({
   aiImportantAutoReplyMode: z.enum(["approval", "auto_send"]).optional(),
   aiImportantAutoReplyInstructions: z.string().trim().min(5).max(2000).optional(),
   aiImportantAutoReplyCooldownHours: z.number().int().min(1).max(720).optional(),
+});
+
+export const updateMessagePreferencesSchema = z.object({
+  allowRemoteImages: z.boolean(),
 });
 
 export const toggleTodoSchema = z.object({

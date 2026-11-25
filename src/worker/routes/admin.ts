@@ -17,6 +17,7 @@ import {
   toggleTodoSchema,
   updateAddressSchema,
   updateDraftMessageSchema,
+  updateMessagePreferencesSchema,
   updateSettingsSchema,
   updateThreadSchema,
 } from "../../shared/schemas";
@@ -61,6 +62,7 @@ import {
   listThreads,
   rejectPendingMessage,
   sendOrDraftEmail,
+  setMessageAllowRemoteImages,
   updateDraftMessage,
   updateThread,
 } from "../services/mail";
@@ -103,7 +105,7 @@ export function createAdminRoutes(options?: {
 
     return c.json({
       appName: c.env.APP_NAME || "Postlet",
-      appVersion: c.env.APP_VERSION || "0.6.1",
+      appVersion: c.env.APP_VERSION || "0.6.2",
       ownerEmail: c.get("ownerEmail") ?? "owner",
       mailProvider: resolveMailProvider(c.env),
       selfHostedTrackingEnabled: isSelfHostedTrackingConfigured(c.env),
@@ -305,6 +307,24 @@ export function createAdminRoutes(options?: {
       const msg = err instanceof Error ? err.message : "Failed to discard draft";
       return c.json({ error: msg }, 400);
     }
+  });
+
+  router.patch("/messages/:id/preferences", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = updateMessagePreferencesSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "Validation failed", issues: parsed.error.flatten() }, 400);
+    }
+
+    const message = await setMessageAllowRemoteImages(
+      c.env.DB,
+      c.req.param("id"),
+      parsed.data.allowRemoteImages,
+    );
+    if (!message) {
+      return c.json({ error: "Message not found" }, 404);
+    }
+    return c.json({ message });
   });
 
   // ---------------------------------------------------------------------------

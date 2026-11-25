@@ -381,6 +381,68 @@ export default function App() {
     }
   }
 
+  async function handleAllowMessageImages(messageId: string) {
+    setSelectedThread((cur) =>
+      cur
+        ? {
+            ...cur,
+            messages: cur.messages.map((m) =>
+              m.id === messageId
+                ? { ...m, headers: { ...m.headers, "x-postlet-allow-images": "true" } }
+                : m,
+            ),
+          }
+        : cur,
+    );
+    try {
+      await api.updateMessagePreferences(messageId, { allowRemoteImages: true });
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Failed to save image preference");
+    }
+  }
+
+  async function handleTrustSenderImages(senderEmail: string, messageId: string) {
+    if (!meta) return;
+    const normalized = senderEmail.trim().toLowerCase();
+    if (!normalized) return;
+
+    const nextTrusted = Array.from(new Set([...meta.settings.trustedImageSenders, normalized]));
+    setMeta((cur) =>
+      cur
+        ? {
+            ...cur,
+            settings: {
+              ...cur.settings,
+              trustedImageSenders: nextTrusted,
+            },
+          }
+        : cur,
+    );
+    setSelectedThread((cur) =>
+      cur
+        ? {
+            ...cur,
+            messages: cur.messages.map((m) =>
+              m.id === messageId || m.fromAddress.trim().toLowerCase() === normalized
+                ? { ...m, headers: { ...m.headers, "x-postlet-allow-images": "true" } }
+                : m,
+            ),
+          }
+        : cur,
+    );
+
+    try {
+      const [settingsRes] = await Promise.all([
+        api.updateSettings({ trustedImageSenders: nextTrusted }),
+        api.updateMessagePreferences(messageId, { allowRemoteImages: true }),
+      ]);
+      setMeta((cur) => (cur ? { ...cur, settings: settingsRes.settings } : cur));
+      showToast("success", `Always allowing images from ${normalized}.`);
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Failed to trust sender images");
+    }
+  }
+
   if (!meta) {
     return (
       <div className="neu-canvas postlet-app-shell items-center justify-center p-6">
@@ -499,6 +561,10 @@ export default function App() {
                 onEditDraft={openEditDraft}
                 onSendDraft={(msg) => void handleSendDraft(msg)}
                 onDiscardDraft={(msg) => void handleDiscardDraft(msg.id, msg.threadId)}
+                onAllowMessageImages={(msgId) => void handleAllowMessageImages(msgId)}
+                onTrustSenderImages={(sender, msgId) =>
+                  void handleTrustSenderImages(sender, msgId)
+                }
                 onOpenAiSettings={() => {
                   setActiveSection("settings");
                   setSettingsTab("ai");

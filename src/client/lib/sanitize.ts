@@ -1,15 +1,20 @@
 /**
  * @file src/client/lib/sanitize.ts
- * @description HTML email sanitization and sandboxed iframe document construction.
- * Uses the browser's native Sanitizer API (`Element.prototype.setHTML`) when supported,
- * and lazily code-splits DOMPurify only as a fallback in browsers lacking native support.
+ * @description HTML email sanitization, inline CID image rewriting, and sandboxed iframe
+ * document construction using consistent DOMPurify rules across all browsers.
  */
+
+import DOMPurify from "dompurify";
+import type { AttachmentRecord } from "../../shared/types";
 
 const ALLOWED_EMAIL_TAGS = [
   "p",
   "br",
+  "wbr",
   "div",
   "span",
+  "center",
+  "font",
   "b",
   "i",
   "strong",
@@ -17,10 +22,19 @@ const ALLOWED_EMAIL_TAGS = [
   "u",
   "s",
   "strike",
+  "del",
+  "ins",
+  "mark",
+  "q",
+  "abbr",
+  "cite",
   "a",
   "ul",
   "ol",
   "li",
+  "dl",
+  "dt",
+  "dd",
   "blockquote",
   "pre",
   "code",
@@ -31,6 +45,9 @@ const ALLOWED_EMAIL_TAGS = [
   "h5",
   "h6",
   "table",
+  "caption",
+  "colgroup",
+  "col",
   "thead",
   "tbody",
   "tfoot",
@@ -38,10 +55,21 @@ const ALLOWED_EMAIL_TAGS = [
   "th",
   "td",
   "img",
+  "picture",
+  "figure",
+  "figcaption",
   "hr",
   "small",
   "sub",
   "sup",
+  "section",
+  "article",
+  "header",
+  "footer",
+  "main",
+  "aside",
+  "details",
+  "summary",
 ];
 
 const ALLOWED_EMAIL_ATTRS = [
@@ -52,34 +80,68 @@ const ALLOWED_EMAIL_ATTRS = [
   "width",
   "height",
   "align",
+  "valign",
+  "border",
+  "cellpadding",
+  "cellspacing",
+  "bgcolor",
+  "color",
   "colspan",
   "rowspan",
+  "dir",
   "class",
+  "target",
+  "rel",
 ];
 
-interface NativeSanitizerElement extends HTMLElement {
-  setHTML: (
-    html: string,
-    options?: { sanitizer?: { elements?: string[]; attributes?: string[] } },
-  ) => void;
-}
+const FORBIDDEN_EMAIL_TAGS = [
+  "script",
+  "style",
+  "iframe",
+  "frame",
+  "frameset",
+  "object",
+  "embed",
+  "applet",
+  "form",
+  "input",
+  "button",
+  "textarea",
+  "select",
+  "option",
+  "meta",
+  "link",
+  "base",
+  "svg",
+  "math",
+  "noscript",
+  "template",
+  "audio",
+  "video",
+  "source",
+  "track",
+  "canvas",
+];
 
-function hasNativeSetHtml(el: HTMLElement): el is NativeSanitizerElement {
-  return "setHTML" in el;
-}
+export const SAFE_INLINE_IMAGE_MIMES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+]);
 
-let domPurifyPromise: Promise<typeof import("dompurify").default> | null = null;
+export const MAX_INLINE_CID_IMAGE_BYTES = 5 * 1024 * 1024;
 
-function loadDomPurify() {
-  domPurifyPromise ??= import("dompurify").then((mod) => mod.default);
-  return domPurifyPromise;
-}
+const SAFE_DATA_IMAGE_URI_RE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,[a-z0-9+/=]+$/i;
+const IMG_SRC_ATTR_RE = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i;
+const IMG_CLASS_ATTR_RE = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i;
 
 /**
- * Sanitizes untrusted HTML email bodies by stripping scripts, event handlers, unsafe attributes,
- * and disallowed tags. Uses native `Element.prototype.setHTML` when present and falls back to
- * dynamically imported DOMPurify with matching strict rules (`ALLOW_ARIA_ATTR: false`,
- * `ALLOW_DATA_ATTR: false`, `KEEP_CONTENT: false`).
+ * Sanitizes untrusted HTML email bodies consistently across all browsers using DOMPurify,
+ * preserving safe layout markup and image attributes while stripping scripts, event handlers,
+ * unsafe tags, and dangerous attributes.
  *
  * @param rawHtml Raw HTML string received from inbound email or Markdown preview.
  * @returns Sanitized HTML string safe to render inside a sandboxed iframe.
@@ -89,24 +151,13 @@ export async function sanitizeEmailHtml(rawHtml: string): Promise<string> {
     return "";
   }
 
-  const container = document.createElement("div");
-  if (hasNativeSetHtml(container)) {
-    container.setHTML(rawHtml, {
-      sanitizer: {
-        elements: ALLOWED_EMAIL_TAGS,
-        attributes: ALLOWED_EMAIL_ATTRS,
-      },
-    });
-    return container.innerHTML;
-  }
-
-  const DOMPurify = await loadDomPurify();
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: [...ALLOWED_EMAIL_TAGS, "#text"],
     ALLOWED_ATTR: ALLOWED_EMAIL_ATTRS,
+    FORBID_TAGS: FORBIDDEN_EMAIL_TAGS,
     ALLOW_ARIA_ATTR: false,
     ALLOW_DATA_ATTR: false,
-    KEEP_CONTENT: false,
+    KEEP_CONTENT: true,
   });
 }
 
@@ -133,8 +184,7 @@ export function plainTextToBasicHtml(text: string): string {
 }
 
 /**
- * Safely populates a live DOM container element with untrusted or editable HTML,
- * preferring native `Element.prototype.setHTML` and lazily falling back to DOMPurify.
+ * Safely populates a live DOM container element with sanitized HTML using DOMPurify.
  */
 export async function safeSetElementHtml(el: HTMLElement, rawHtml: string): Promise<void> {
   if (!rawHtml.trim()) {
@@ -142,24 +192,79 @@ export async function safeSetElementHtml(el: HTMLElement, rawHtml: string): Prom
     return;
   }
 
-  if (hasNativeSetHtml(el)) {
-    el.setHTML(rawHtml, {
-      sanitizer: {
-        elements: ALLOWED_EMAIL_TAGS,
-        attributes: ALLOWED_EMAIL_ATTRS,
-      },
-    });
-    return;
+  el.innerHTML = await sanitizeEmailHtml(rawHtml);
+}
+
+/**
+ * Normalizes a MIME `Content-ID` header value or `cid:` URI into a canonical lowercase key.
+ */
+export function normalizeContentId(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let cleaned = raw.trim().replace(/^cid:/i, "").trim();
+  if (cleaned.startsWith("<") && cleaned.endsWith(">")) {
+    cleaned = cleaned.slice(1, -1);
+  } else {
+    cleaned = cleaned.replace(/^<+|>+$/g, "");
+  }
+  try {
+    cleaned = decodeURIComponent(cleaned);
+  } catch {
+    // Keep raw token if percent-encoding is malformed
+  }
+  return cleaned.trim().toLowerCase();
+}
+
+/**
+ * Matches `cid:` image references inside email HTML to safe raster attachments stored in R2.
+ */
+export function matchCidAttachments(
+  rawHtml: string,
+  attachments: AttachmentRecord[],
+): Array<{ cidKey: string; attachment: AttachmentRecord }> {
+  if (!rawHtml || attachments.length === 0) {
+    return [];
   }
 
-  const DOMPurify = await loadDomPurify();
-  el.innerHTML = DOMPurify.sanitize(rawHtml, {
-    ALLOWED_TAGS: [...ALLOWED_EMAIL_TAGS, "#text"],
-    ALLOWED_ATTR: ALLOWED_EMAIL_ATTRS,
-    ALLOW_ARIA_ATTR: false,
-    ALLOW_DATA_ATTR: false,
-    KEEP_CONTENT: false,
+  const eligible = attachments.filter((att) => {
+    const mime = (att.contentType || "").split(";")[0].trim().toLowerCase();
+    return (
+      SAFE_INLINE_IMAGE_MIMES.has(mime) &&
+      att.sizeBytes >= 0 &&
+      att.sizeBytes <= MAX_INLINE_CID_IMAGE_BYTES
+    );
   });
+  if (eligible.length === 0) {
+    return [];
+  }
+
+  const seenCids = new Set<string>();
+  const matches: Array<{ cidKey: string; attachment: AttachmentRecord }> = [];
+  const imgTagRe = /<img\b[^>]*>/gi;
+  let imgMatch: RegExpExecArray | null;
+
+  while ((imgMatch = imgTagRe.exec(rawHtml)) !== null) {
+    const srcMatch = IMG_SRC_ATTR_RE.exec(imgMatch[0]);
+    const rawSrc = (srcMatch?.[1] ?? srcMatch?.[2] ?? srcMatch?.[3] ?? "").trim();
+    if (!/^cid:/i.test(rawSrc)) continue;
+
+    const cidKey = normalizeContentId(rawSrc);
+    if (!cidKey || seenCids.has(cidKey)) continue;
+
+    const attachment =
+      eligible.find((att) => normalizeContentId(att.contentId) === cidKey) ??
+      eligible.find(
+        (att) =>
+          att.contentDisposition.trim().toLowerCase() === "inline" &&
+          att.filename.trim().toLowerCase() === cidKey,
+      );
+
+    if (attachment) {
+      seenCids.add(cidKey);
+      matches.push({ cidKey, attachment });
+    }
+  }
+
+  return matches;
 }
 
 /**
@@ -170,20 +275,102 @@ export function hasRemoteImages(rawHtml: string): boolean {
 }
 
 /**
+ * Strips the `src` attribute from an `<img ...>` attribute substring and ensures
+ * `postlet-blocked-img` is present in its `class` list so blocked images hide cleanly.
+ */
+function stripSrcAndHideImgAttrs(attrs: string): string {
+  const selfClosing = /\/\s*$/.test(attrs);
+  let nextAttrs = attrs.replace(/\/\s*$/, "").replace(
+    /\s*\bsrc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+)/i,
+    "",
+  );
+
+  const classMatch = IMG_CLASS_ATTR_RE.exec(nextAttrs);
+  if (classMatch) {
+    const existing = (classMatch[1] ?? classMatch[2] ?? classMatch[3] ?? "").trim();
+    const tokens = existing ? existing.split(/\s+/) : [];
+    if (!tokens.includes("postlet-blocked-img")) {
+      tokens.push("postlet-blocked-img");
+    }
+    const updatedClass = `class="${tokens.join(" ")}"`;
+    nextAttrs =
+      nextAttrs.slice(0, classMatch.index) +
+      updatedClass +
+      nextAttrs.slice(classMatch.index + classMatch[0].length);
+  } else {
+    nextAttrs = `${nextAttrs} class="postlet-blocked-img"`;
+  }
+
+  return selfClosing ? `${nextAttrs} /` : nextAttrs;
+}
+
+/**
+ * Rewrites `<img>` tags inside already-sanitized email HTML to resolve safe `cid:` inline images
+ * to `data:` URIs and hide blocked external or unresolved `cid:` images without broken icons.
+ */
+export function prepareEmailHtmlForIframe(
+  sanitizedHtml: string,
+  options?: { allowRemoteImages?: boolean; cidDataUris?: ReadonlyMap<string, string> },
+): string {
+  if (!sanitizedHtml) {
+    return "";
+  }
+
+  return sanitizedHtml.replace(/<img\b([^>]*)>/gi, (fullTag, attrs: string) => {
+    const srcMatch = IMG_SRC_ATTR_RE.exec(attrs);
+    if (!srcMatch) {
+      return fullTag;
+    }
+
+    const rawSrc = (srcMatch[1] ?? srcMatch[2] ?? srcMatch[3] ?? "").trim();
+
+    if (/^cid:/i.test(rawSrc)) {
+      const cidKey = normalizeContentId(rawSrc);
+      const dataUri = options?.cidDataUris?.get(cidKey);
+      if (dataUri && SAFE_DATA_IMAGE_URI_RE.test(dataUri)) {
+        const updatedAttrs =
+          attrs.slice(0, srcMatch.index) +
+          `src="${dataUri}"` +
+          attrs.slice(srcMatch.index + srcMatch[0].length);
+        return `<img${updatedAttrs}>`;
+      }
+      return `<img${stripSrcAndHideImgAttrs(attrs)}>`;
+    }
+
+    if (/^https?:\/\//i.test(rawSrc)) {
+      if (options?.allowRemoteImages) {
+        return fullTag;
+      }
+      return `<img${stripSrcAndHideImgAttrs(attrs)}>`;
+    }
+
+    return fullTag;
+  });
+}
+
+/**
  * Builds a complete, isolated `srcDoc` HTML document for rendering sanitized email markup
  * inside a `<iframe sandbox="allow-popups allow-popups-to-escape-sandbox">`.
- * Remote images are blocked by default (`img-src data: cid:`) to prevent tracking pixels unless
+ * Remote images are blocked by default (`img-src data:`) to prevent tracking pixels unless
  * `allowRemoteImages` is explicitly set to `true` by the owner.
  *
  * @param sanitizedBody Already-sanitized email HTML fragment.
- * @param options Rendering options (`allowRemoteImages`).
+ * @param options Rendering options (`allowRemoteImages`, `theme`, `cidDataUris`).
  * @returns Complete HTML document string with CSP and base target attributes.
  */
 export function buildEmailIframeSrcDoc(
   sanitizedBody: string,
-  options?: { allowRemoteImages?: boolean; theme?: "light" | "dark" },
+  options?: {
+    allowRemoteImages?: boolean;
+    theme?: "light" | "dark";
+    cidDataUris?: ReadonlyMap<string, string>;
+  },
 ): string {
-  const imgSrc = options?.allowRemoteImages ? "https: http: data: cid:" : "data: cid:";
+  const preparedBody = prepareEmailHtmlForIframe(sanitizedBody, {
+    allowRemoteImages: options?.allowRemoteImages,
+    cidDataUris: options?.cidDataUris,
+  });
+  const imgSrc = options?.allowRemoteImages ? "https: http: data:" : "data:";
   const theme = options?.theme ?? "light";
   const isDark = theme === "dark";
   const bg = isDark ? "#1f1d1b" : "#f6f3ee";
@@ -214,7 +401,8 @@ export function buildEmailIframeSrcDoc(
         word-break: break-word;
       }
       a { color: ${linkColor}; text-decoration: underline; }
-      img { max-width: 100%; height: auto; border-radius: 8px; }
+      img { max-width: 100%; height: auto; }
+      img.postlet-blocked-img { display: none !important; }
       blockquote {
         margin: 12px 0;
         padding-left: 12px;
@@ -233,6 +421,6 @@ export function buildEmailIframeSrcDoc(
       th, td { border: 1px solid ${tableBorder}; padding: 6px 10px; text-align: left; }
     </style>
   </head>
-  <body>${sanitizedBody}</body>
+  <body>${preparedBody}</body>
 </html>`;
 }

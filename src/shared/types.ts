@@ -159,6 +159,7 @@ export interface AppSettings {
   mailDomain: string;
   mailDomains: string[];
   catchAllEnabled: boolean;
+  trustedImageSenders: string[];
   aiEnabled: boolean;
   aiModel: string;
   aiDailyCap: number;

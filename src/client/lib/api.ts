@@ -161,6 +161,19 @@ export const api = {
     );
   },
 
+  updateMessagePreferences(
+    id: string,
+    patch: { allowRemoteImages: boolean },
+  ): Promise<{ message: MessageRecord }> {
+    return requestJson<{ message: MessageRecord }>(
+      `/api/admin/messages/${encodeURIComponent(id)}/preferences`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    );
+  },
+
   approveMessage(
     id: string,
     edits?: {

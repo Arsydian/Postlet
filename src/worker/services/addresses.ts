@@ -317,10 +317,32 @@ export async function getSettings(
     mailDomains = parseDomainList(primaryDomain);
   }
 
+  let trustedImageSenders: string[] = [];
+  const rawTrustedSenders = map.get("trusted_image_senders");
+  if (rawTrustedSenders !== undefined) {
+    try {
+      const parsed = JSON.parse(rawTrustedSenders) as unknown;
+      if (Array.isArray(parsed)) {
+        const seen = new Set<string>();
+        for (const entry of parsed) {
+          if (typeof entry !== "string") continue;
+          const normalized = entry.trim().toLowerCase();
+          if (normalized && !seen.has(normalized)) {
+            seen.add(normalized);
+            trustedImageSenders.push(normalized);
+          }
+        }
+      }
+    } catch {
+      trustedImageSenders = [];
+    }
+  }
+
   return {
     mailDomain: mailDomains[0] ?? primaryDomain,
     mailDomains,
     catchAllEnabled: bool("catch_all_enabled", true),
+    trustedImageSenders,
     aiEnabled: bool("ai_enabled", false),
     aiModel: map.get("ai_model") || defaultAiModel,
     aiDailyCap: num("ai_daily_cap", 50),
@@ -369,6 +391,16 @@ export async function updateSettings(
   }
   if (patch.catchAllEnabled !== undefined)
     entries.push(["catch_all_enabled", String(patch.catchAllEnabled)]);
+  if (patch.trustedImageSenders !== undefined) {
+    const normalized = Array.from(
+      new Set(
+        patch.trustedImageSenders
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    entries.push(["trusted_image_senders", JSON.stringify(normalized)]);
+  }
   if (patch.aiEnabled !== undefined) entries.push(["ai_enabled", String(patch.aiEnabled)]);
   if (patch.aiModel !== undefined) entries.push(["ai_model", patch.aiModel]);
   if (patch.aiDailyCap !== undefined) entries.push(["ai_daily_cap", String(patch.aiDailyCap)]);
